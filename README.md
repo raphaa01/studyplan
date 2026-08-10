@@ -1,17 +1,22 @@
 # Fokusplan
 
-Fokusplan is a local-first study-planning application for students. It turns weekly availability, exam deadlines, topic confidence, scope, and importance into concrete study blocks with active recall, spaced repetitions, realistic workload limits, and visible breaks.
+Fokusplan turns availability, exam deadlines, topic confidence, scope, and importance into a realistic weekly study plan with active recall, spaced repetition, workload limits, and visible breaks.
 
 ## Run locally
 
-Requirements: Node.js 22.13 or newer.
+Requirements: Node.js 22.13 or newer and a Supabase project.
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
-Create a device-local account on first launch, then complete the three-step setup for workload, study days, and preferred times. Each local account receives separate exams, availability, completion state, and feedback through the versioned repository abstraction.
+Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env.local`. Create an online account on first launch, confirm the email when required, and complete the three-step setup. Study data is synchronized through Supabase and cached locally for short connection interruptions.
+
+## Database
+
+The production schema is stored in `supabase/migrations/`. `public.study_data` stores one JSONB study document per authenticated user. Row Level Security and explicit grants restrict every operation to `auth.uid() = user_id`; no service-role key is exposed to the browser.
 
 ## Quality checks
 
@@ -27,11 +32,10 @@ npm run test:render
 
 - `app/` — dashboard, weekly plan, exams, availability, settings, and onboarding routes
 - `components/` — shared shell, session cards, feedback, and application state
-- `components/providers/account-provider.tsx` — local account session and profile state
+- `components/providers/account-provider.tsx` — Supabase Auth session and profile state
 - `lib/planner/` — pure deterministic priority, spacing, session, and break logic
-- `lib/storage/` — replaceable persistence interface and local implementation
-- `types/` — planner and product domain model
-- `tests/` — planner scenarios and rendered-app verification
-- `ARCHITECTURE.md` — migration path to an API and standard PostgreSQL through `DATABASE_URL`
-
-The current version uses device-local accounts with PBKDF2-derived password hashes. It has no database, cloud persistence, external identity provider, or external AI API. These accounts do not synchronize across browsers or devices.
+- `lib/storage/` — Supabase persistence plus a local offline cache
+- `lib/supabase/` — browser client configuration
+- `supabase/migrations/` — versioned PostgreSQL schema and RLS policies
+- `types/` — planner, product, and generated database types
+- `tests/` — planner scenarios and production-render verification

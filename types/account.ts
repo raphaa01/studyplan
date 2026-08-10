@@ -7,7 +7,17 @@ export interface LocalAccount {
   createdAt: string;
 }
 
-export type PublicAccount = Omit<LocalAccount, "passwordHash" | "salt">;
+export interface PublicAccount {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface SignUpResult {
+  account: PublicAccount | null;
+  confirmationRequired: boolean;
+}
 
 export interface AccountStore {
   version: 1;

@@ -422,6 +422,8 @@ input::placeholder { color: #b0b4ad; }
 .input-with-icon input { height: 100%; margin: 0; padding: 0; border: 0; box-shadow: none !important; }
 .input-with-icon button { width: 28px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
 .form-error { margin: -3px 0 0; padding: 9px 11px; border-radius: 6px; background: #fff1ef; color: var(--danger); font-size: 11px; }
+.auth-confirmation { display: grid; gap: 1rem; text-align: center; }
+.auth-confirmation > span { width: 3rem; height: 3rem; display: grid; place-items: center; margin: 0 auto; border-radius: 999px; color: #fff; background: var(--accent); font-size: 1.25rem; font-weight: 800; }
 .auth-switch { margin: 22px 0 0; text-align: center; color: var(--muted); font-size: 11px; }
 .auth-switch a { color: var(--accent); font-weight: 650; }
 
