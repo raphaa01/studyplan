@@ -1,19 +1,35 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import test from "node:test";
 
-async function render(path = "/") {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-  return worker.fetch(new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
+const port = 43123;
+
+async function waitForServer() {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/login`);
+      if (response.ok) return response;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("Next.js production server did not start in time.");
 }
 
 test("server-renders the Fokusplan application shell", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-  const html = await response.text();
-  assert.match(html, /<title>Fokusplan<\/title>/i);
-  assert.match(html, /Dein realistischer Lernplan/i);
-  assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+  const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(port)], {
+    cwd: process.cwd(),
+    stdio: "ignore",
+  });
+
+  try {
+    const response = await waitForServer();
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+    const html = await response.text();
+    assert.match(html, /<title>Fokusplan<\/title>/i);
+    assert.match(html, /Dein Plan wird vorbereitet/i);
+    assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+  } finally {
+    server.kill();
+  }
 });

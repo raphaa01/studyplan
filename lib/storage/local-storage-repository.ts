@@ -17,6 +17,15 @@ export class LocalStorageRepository implements StorageRepository {
     if (legacy && !window.localStorage.getItem(target)) window.localStorage.setItem(target, legacy);
   }
 
+  static findMigrationCandidate(): StudyData | null {
+    if (typeof window === "undefined") return null;
+    const direct = window.localStorage.getItem(LEGACY_KEY);
+    const scopedKey = Object.keys(window.localStorage).find((key) => key.startsWith(`${LEGACY_KEY}:`) && !key.endsWith(":guest"));
+    const raw = direct ?? (scopedKey ? window.localStorage.getItem(scopedKey) : null);
+    if (!raw) return null;
+    try { return JSON.parse(raw) as StudyData; } catch { return null; }
+  }
+
   private read(): StudyData | null {
     if (typeof window === "undefined") return null;
     try {
