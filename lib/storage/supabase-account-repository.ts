@@ -44,7 +44,10 @@ export class SupabaseAccountRepository {
     const { data, error } = await this.client.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
-      options: { data: { name: name.trim() } },
+      options: {
+        data: { name: name.trim() },
+        emailRedirectTo: `${window.location.origin}/login`,
+      },
     });
     if (error) throw friendlyAuthError(error.message);
     return {
