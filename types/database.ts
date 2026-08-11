@@ -37,7 +37,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      consume_username_signup_attempt: {
+        Args: { p_rate_key: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

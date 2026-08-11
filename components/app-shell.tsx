@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="sidebar-bottom">
           <Link href="/settings" className={pathname.startsWith("/settings") ? "nav-item active" : "nav-item"}><Settings size={18} /><span>Einstellungen</span></Link>
-          <Link href="/settings" className="profile"><span className="avatar">{(account.name || preferences.name).slice(0, 1).toUpperCase() || "A"}</span><span><strong>{account.name || preferences.name}</strong><small>{account.email}</small></span></Link>
+          <Link href="/settings" className="profile"><span className="avatar">{(account.name || preferences.name).slice(0, 1).toUpperCase() || "A"}</span><span><strong>{account.name || preferences.name}</strong><small>@{account.username}</small></span></Link>
         </div>
       </aside>
       {open && <button className="sidebar-backdrop" aria-label="Navigation schließen" onClick={() => setOpen(false)} />}

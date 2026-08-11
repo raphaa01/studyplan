@@ -416,6 +416,7 @@ input::placeholder { color: #b0b4ad; }
 .auth-card > p:not(.eyebrow):not(.auth-switch) { color: var(--muted); line-height: 1.55; }
 .auth-form { margin-top: 28px; display: grid; gap: 16px; }
 .auth-form > .button { width: 100%; min-height: 44px; margin-top: 4px; }
+.field-hint { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; font-weight: 500; line-height: 1.4; }
 .input-with-icon { height: 44px; margin-top: 7px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 7px; display: flex; align-items: center; gap: 9px; background: white; }
 .input-with-icon:focus-within { border-color: #758b78; box-shadow: 0 0 0 3px rgba(71,98,75,.09); }
 .input-with-icon > svg { flex: none; color: var(--faint); }

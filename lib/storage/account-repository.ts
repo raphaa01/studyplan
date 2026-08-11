@@ -1,7 +1,8 @@
+import { validateUsername } from "@/lib/auth/username";
 import type { AccountStore, LocalAccount, PublicAccount } from "@/types/account";
 
-const ACCOUNT_KEY = "fokusplan:accounts:v1";
-const EMPTY_STORE: AccountStore = { version: 1, accounts: [], activeAccountId: null };
+const ACCOUNT_KEY = "fokusplan:accounts:v2";
+const EMPTY_STORE: AccountStore = { version: 2, accounts: [], activeAccountId: null };
 
 function toHex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -15,7 +16,7 @@ async function hashPassword(password: string, salt: string): Promise<string> {
 }
 
 function publicAccount(account: LocalAccount): PublicAccount {
-  return { id: account.id, name: account.name, email: account.email, createdAt: account.createdAt };
+  return { id: account.id, name: account.name, username: account.username, createdAt: account.createdAt };
 }
 
 export class LocalAccountRepository {
@@ -43,27 +44,28 @@ export class LocalAccountRepository {
     return this.read().accounts.map(publicAccount);
   }
 
-  async signUp(name: string, email: string, password: string): Promise<PublicAccount> {
+  async signUp(username: string, password: string): Promise<PublicAccount> {
     const store = this.read();
-    const normalizedEmail = email.trim().toLowerCase();
-    if (store.accounts.some((account) => account.email === normalizedEmail)) throw new Error("Für diese E-Mail gibt es bereits ein Konto.");
+    const normalizedUsername = validateUsername(username);
+    if (store.accounts.some((account) => account.username === normalizedUsername)) throw new Error("Dieser Benutzername ist bereits vergeben.");
     const salt = crypto.randomUUID();
     const account: LocalAccount = {
       id: crypto.randomUUID(),
-      name: name.trim(),
-      email: normalizedEmail,
+      name: username.trim(),
+      username: normalizedUsername,
       passwordHash: await hashPassword(password, salt),
       salt,
       createdAt: new Date().toISOString(),
     };
-    this.write({ version: 1, accounts: [...store.accounts, account], activeAccountId: account.id });
+    this.write({ version: 2, accounts: [...store.accounts, account], activeAccountId: account.id });
     return publicAccount(account);
   }
 
-  async signIn(email: string, password: string): Promise<PublicAccount> {
+  async signIn(username: string, password: string): Promise<PublicAccount> {
     const store = this.read();
-    const account = store.accounts.find((item) => item.email === email.trim().toLowerCase());
-    if (!account || await hashPassword(password, account.salt) !== account.passwordHash) throw new Error("E-Mail oder Passwort ist nicht korrekt.");
+    const normalizedUsername = validateUsername(username);
+    const account = store.accounts.find((item) => item.username === normalizedUsername);
+    if (!account || await hashPassword(password, account.salt) !== account.passwordHash) throw new Error("Benutzername oder Passwort ist nicht korrekt.");
     this.write({ ...store, activeAccountId: account.id });
     return publicAccount(account);
   }
