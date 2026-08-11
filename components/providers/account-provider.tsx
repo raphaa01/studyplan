@@ -2,13 +2,13 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { SupabaseAccountRepository } from "@/lib/storage/supabase-account-repository";
-import type { PublicAccount, SignUpResult } from "@/types/account";
+import type { PublicAccount } from "@/types/account";
 
 interface AccountContextValue {
   account: PublicAccount | null;
   hydrated: boolean;
-  signUp: (name: string, email: string, password: string) => Promise<SignUpResult>;
-  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (username: string, password: string) => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateName: (name: string) => Promise<void>;
 }
@@ -37,14 +37,12 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     return () => { active = false; unsubscribe(); };
   }, [repository]);
 
-  const signUp = useCallback(async (name: string, email: string, password: string) => {
-    const result = await repository().signUp(name, email, password);
-    if (result.account) setAccount(result.account);
-    return result;
+  const signUp = useCallback(async (username: string, password: string) => {
+    setAccount(await repository().signUp(username, password));
   }, [repository]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    setAccount(await repository().signIn(email, password));
+  const signIn = useCallback(async (username: string, password: string) => {
+    setAccount(await repository().signIn(username, password));
   }, [repository]);
 
   const signOut = useCallback(async () => {

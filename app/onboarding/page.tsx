@@ -31,7 +31,7 @@ export default function OnboardingPage() {
     router.replace("/");
   }
   return <main className="onboarding-shell setup-shell">
-    <header className="onboarding-header"><div className="brand"><span className="brand-mark"><GraduationCap size={20} /></span><span>Fokusplan</span></div><span>{account?.email}</span></header>
+    <header className="onboarding-header"><div className="brand"><span className="brand-mark"><GraduationCap size={20} /></span><span>Fokusplan</span></div><span>@{account?.username}</span></header>
     <div className="onboarding-progress"><span style={{ width: `${step / 3 * 100}%` }} /></div>
     <section className="onboarding-card setup-card">
       {step === 1 && <div className="onboarding-content wide"><span className="setup-step">01</span><p className="eyebrow">Dein Rhythmus</p><h1>Wie viel soll an einem Tag maximal anstehen?</h1><p className="lead">Das ist eine Obergrenze, kein tägliches Ziel. Fokusplan lässt bewusst Luft für Schule, Freizeit und Erholung.</p><div className="load-options">{loadOptions.map((option) => <button key={option.minutes} className={maxDailyMinutes === option.minutes ? "active" : ""} onClick={() => setMaxDailyMinutes(option.minutes)}><TimerReset size={20} /><strong>{option.title}</strong><span>{option.text}</span>{maxDailyMinutes === option.minutes && <i><Check size={14} /></i>}</button>)}</div></div>}

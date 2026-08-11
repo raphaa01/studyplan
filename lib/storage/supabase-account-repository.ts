@@ -1,27 +1,41 @@
 import type { AuthChangeEvent, Session, User } from "@supabase/supabase-js";
+import { normalizeUsername, usernameToAuthEmail, validateUsername } from "@/lib/auth/username";
 import { createClient } from "@/lib/supabase/client";
-import type { PublicAccount, SignUpResult } from "@/types/account";
+import type { PublicAccount } from "@/types/account";
 
 function toPublicAccount(user: User): PublicAccount {
-  const email = user.email ?? "";
-  const fallbackName = email.split("@")[0] || "Lernende Person";
+  const username = typeof user.user_metadata.username === "string"
+    ? normalizeUsername(user.user_metadata.username)
+    : "lernende-person";
   return {
     id: user.id,
     name: typeof user.user_metadata.name === "string" && user.user_metadata.name.trim()
       ? user.user_metadata.name.trim()
-      : fallbackName,
-    email,
+      : username,
+    username,
     createdAt: user.created_at,
   };
 }
 
 function friendlyAuthError(message: string): Error {
   const normalized = message.toLowerCase();
-  if (normalized.includes("invalid login credentials")) return new Error("E-Mail oder Passwort ist nicht korrekt.");
-  if (normalized.includes("user already registered")) return new Error("Für diese E-Mail gibt es bereits ein Konto.");
-  if (normalized.includes("password should be")) return new Error("Das Passwort erfüllt die Sicherheitsanforderungen nicht.");
-  if (normalized.includes("email rate limit")) return new Error("Zu viele E-Mails wurden angefordert. Bitte versuche es später erneut.");
+  if (normalized.includes("invalid login credentials")) return new Error("Benutzername oder Passwort ist nicht korrekt.");
+  if (normalized.includes("already") || normalized.includes("registered")) return new Error("Dieser Benutzername ist bereits vergeben.");
+  if (normalized.includes("password")) return new Error("Das Passwort erfüllt die Sicherheitsanforderungen nicht.");
+  if (normalized.includes("rate") || normalized.includes("too many")) return new Error("Zu viele Registrierungsversuche. Bitte versuche es später erneut.");
   return new Error("Die Anmeldung konnte nicht abgeschlossen werden. Bitte versuche es erneut.");
+}
+
+async function functionErrorMessage(error: unknown): Promise<string> {
+  if (!error || typeof error !== "object" || !("context" in error)) return String(error);
+  const context = (error as { context?: Response }).context;
+  if (!context) return String(error);
+  try {
+    const body = await context.clone().json() as { error?: string };
+    return body.error ?? String(error);
+  } catch {
+    return String(error);
+  }
 }
 
 export class SupabaseAccountRepository {
@@ -40,25 +54,18 @@ export class SupabaseAccountRepository {
     return () => data.subscription.unsubscribe();
   }
 
-  async signUp(name: string, email: string, password: string): Promise<SignUpResult> {
-    const { data, error } = await this.client.auth.signUp({
-      email: email.trim().toLowerCase(),
-      password,
-      options: {
-        data: { name: name.trim() },
-        emailRedirectTo: `${window.location.origin}/login`,
-      },
+  async signUp(username: string, password: string): Promise<PublicAccount> {
+    const normalizedUsername = validateUsername(username);
+    const { error: signUpError } = await this.client.functions.invoke("username-signup", {
+      body: { username: normalizedUsername, password },
     });
-    if (error) throw friendlyAuthError(error.message);
-    return {
-      account: data.session && data.user ? toPublicAccount(data.user) : null,
-      confirmationRequired: !data.session,
-    };
+    if (signUpError) throw friendlyAuthError(await functionErrorMessage(signUpError));
+    return this.signIn(normalizedUsername, password);
   }
 
-  async signIn(email: string, password: string): Promise<PublicAccount> {
+  async signIn(username: string, password: string): Promise<PublicAccount> {
     const { data, error } = await this.client.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
+      email: await usernameToAuthEmail(username),
       password,
     });
     if (error || !data.user) throw friendlyAuthError(error?.message ?? "invalid login credentials");

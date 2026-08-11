@@ -1,7 +1,7 @@
 export interface LocalAccount {
   id: string;
   name: string;
-  email: string;
+  username: string;
   passwordHash: string;
   salt: string;
   createdAt: string;
@@ -10,17 +10,12 @@ export interface LocalAccount {
 export interface PublicAccount {
   id: string;
   name: string;
-  email: string;
+  username: string;
   createdAt: string;
 }
 
-export interface SignUpResult {
-  account: PublicAccount | null;
-  confirmationRequired: boolean;
-}
-
 export interface AccountStore {
-  version: 1;
+  version: 2;
   accounts: LocalAccount[];
   activeAccountId: string | null;
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
 import { AuthFrame } from "@/components/auth/auth-frame";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "@/components/providers/account-provider";
@@ -11,18 +11,20 @@ import { useAccount } from "@/components/providers/account-provider";
 export default function LoginPage() {
   const router = useRouter();
   const { signIn } = useAccount();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(""); setSubmitting(true);
-    try { await signIn(email, password); router.replace("/"); }
+    try { await signIn(username, password); router.replace("/"); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Anmeldung fehlgeschlagen."); setSubmitting(false); }
   }
+
   return <AuthFrame mode="login"><form className="auth-form" onSubmit={submit}>
-    <label>E-Mail<div className="input-with-icon"><Mail size={17} /><input required autoFocus type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="du@beispiel.de" autoComplete="email" /></div></label>
+    <label>Benutzername<div className="input-with-icon"><UserRound size={17} /><input required autoFocus value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Dein Benutzername" autoComplete="username" /></div></label>
     <label>Passwort<div className="input-with-icon"><LockKeyhole size={17} /><input required type={visible ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Dein Passwort" autoComplete="current-password" /><button type="button" aria-label={visible ? "Passwort ausblenden" : "Passwort anzeigen"} onClick={() => setVisible((value) => !value)}>{visible ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></label>
     {error && <p className="form-error">{error}</p>}
     <Button type="submit" disabled={submitting}>{submitting ? "Wird angemeldet …" : <>Anmelden <ArrowRight size={17} /></>}</Button>
