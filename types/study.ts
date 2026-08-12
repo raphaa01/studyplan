@@ -9,6 +9,9 @@ export type SessionType =
   | "review"
   | "break";
 export type SessionStatus = "planned" | "completed" | "missed" | "skipped";
+export type LearningMethodId = "auto" | "active-recall" | "spaced-repetition" | "interleaving" | "pomodoro" | "exam-simulation";
+export type CalendarItemKind = "appointment" | "todo";
+export type CalendarItemStatus = "planned" | "completed";
 
 export interface TimeWindow {
   id: string;
@@ -48,6 +51,18 @@ export interface Exam {
   estimatedHours: number | null;
   color: string;
   topics: ExamTopic[];
+  learningMethod: LearningMethodId;
+}
+
+export interface CalendarItem {
+  id: string;
+  title: string;
+  date: string;
+  startTime: string;
+  duration: number;
+  kind: CalendarItemKind;
+  status: CalendarItemStatus;
+  notes?: string;
 }
 
 export interface StudySession {
@@ -87,6 +102,7 @@ export interface StudyData {
   exams: Exam[];
   plan: StudyPlan;
   feedback: StudySessionFeedback[];
+  calendarItems: CalendarItem[];
 }
 
 export interface PlannerInput {
@@ -94,6 +110,7 @@ export interface PlannerInput {
   exams: Exam[];
   previousSessions?: StudySession[];
   feedback?: StudySessionFeedback[];
+  calendarItems?: CalendarItem[];
   preferences?: Partial<UserPreferences>;
   now?: string;
 }

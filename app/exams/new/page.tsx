@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { useStudy } from "@/components/providers/study-provider";
 import { addDays, startOfToday } from "@/lib/planner";
 import { subjectColors } from "@/lib/demo-data";
-import type { Confidence, Exam, ExamSize, ExamType } from "@/types/study";
+import { learningMethods, recommendLearningMethod } from "@/lib/learning-methods";
+import type { Confidence, Exam, ExamSize, ExamType, LearningMethodId } from "@/types/study";
 
 function ExamForm() {
   const router = useRouter();
@@ -17,7 +18,7 @@ function ExamForm() {
   const { exams, saveExam } = useStudy();
   const formId = useId().replace(/:/g, "");
   const editing = exams.find((exam) => exam.id === params.get("edit"));
-  const initial = useMemo<Exam>(() => editing ?? ({ id: `exam-${formId}`, subject: "", title: "", type: "exam", date: addDays(startOfToday(), 7), size: "medium", importance: 3, estimatedHours: null, color: subjectColors[exams.length % subjectColors.length], topics: [{ id: `topic-${formId}`, name: "", confidence: null }] }), [editing, exams.length, formId]);
+  const initial = useMemo<Exam>(() => editing ?? ({ id: `exam-${formId}`, subject: "", title: "", type: "exam", date: addDays(startOfToday(), 7), size: "medium", importance: 3, estimatedHours: null, color: subjectColors[exams.length % subjectColors.length], topics: [{ id: `topic-${formId}`, name: "", confidence: null }], learningMethod: "auto" }), [editing, exams.length, formId]);
   const [exam, setExam] = useState(initial);
   const [hoursMode, setHoursMode] = useState<"auto" | "custom">(initial.estimatedHours ? "custom" : "auto");
   function submit(event: FormEvent) {
@@ -41,6 +42,8 @@ function ExamForm() {
           <label>Geschätzter Umfang</label><div className="segmented">{(["small", "medium", "large", "very-large"] as ExamSize[]).map((value, index) => <button type="button" key={value} className={exam.size === value ? "active" : ""} onClick={() => setExam({ ...exam, size: value })}>{["Klein", "Mittel", "Groß", "Sehr groß"][index]}</button>)}</div>
           <label>Wie wichtig ist die Prüfung für dich? <strong>{exam.importance}/5</strong><input className="range" type="range" min="1" max="5" value={exam.importance} onChange={(event) => setExam({ ...exam, importance: Number(event.target.value) as Exam["importance"] })} /></label>
           <label>Benötigte Lernzeit</label><div className="inline-options"><label><input type="radio" checked={hoursMode === "auto"} onChange={() => setHoursMode("auto")} />Automatisch bestimmen</label><label><input type="radio" checked={hoursMode === "custom"} onChange={() => setHoursMode("custom")} />Eigene Schätzung</label>{hoursMode === "custom" && <input className="hours-input" type="number" min="0.5" step="0.5" value={exam.estimatedHours ?? 1} onChange={(event) => setExam({ ...exam, estimatedHours: Number(event.target.value) })} />}</div>
+          <label>Lernmethode<select value={exam.learningMethod} onChange={(event) => setExam({ ...exam, learningMethod: event.target.value as LearningMethodId })}><option value="auto">Automatisch empfehlen</option>{learningMethods.map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
+          {exam.learningMethod === "auto" && exam.subject && <p className="method-inline-hint">Empfehlung für diese Prüfung: <strong>{learningMethods.find((method) => method.id === recommendLearningMethod(exam))?.name}</strong></p>}
         </div></section>
         <section className="form-section"><div className="form-section-number">3</div><div className="form-section-content"><h2>Themen & Sicherheit</h2><p>Schwächere Themen bekommen automatisch mehr aktive Wiederholungen.</p>
           <div className="topic-editor"><div className="topic-header"><span>Thema</span><span>Sicherheit</span></div>{exam.topics.map((topic, index) => <div className="topic-row" key={topic.id}><input value={topic.name} autoFocus={index === 0 && !editing} onChange={(event) => updateTopic(topic.id, { name: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTopic(); } }} placeholder="z. B. Extrempunkte" /><select value={topic.confidence ?? ""} onChange={(event) => updateTopic(topic.id, { confidence: event.target.value ? Number(event.target.value) as Confidence : null })}><option value="">Weiß ich noch nicht</option><option value="1">1 · kaum</option><option value="2">2 · unsicher</option><option value="3">3 · teilweise</option><option value="4">4 · ziemlich sicher</option><option value="5">5 · beherrsche ich</option></select><button type="button" aria-label="Thema löschen" onClick={() => setExam((value) => ({ ...value, topics: value.topics.filter((item) => item.id !== topic.id) }))}><Trash2 size={16} /></button></div>)}</div>

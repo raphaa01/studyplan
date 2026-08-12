@@ -1,9 +1,10 @@
-import type { Exam, PlannerInput, StudyPlan, StudySession } from "@/types/study";
+import type { Exam, PlannerInput, StudyPlan, StudySession, TimeWindow } from "@/types/study";
 import { addDays, daysBetween, minutesFromTime, startOfToday, timeFromMinutes } from "./date-utils";
 import { addBreaks } from "./break-scheduler";
 import { estimateExamMinutes, examPriority, topicUncertainty } from "./priority";
 import { phaseFor, spacingScore } from "./spacing";
 import { rationaleFor, sessionCopy } from "./session-generator";
+import { resolvedLearningMethod } from "@/lib/learning-methods";
 
 interface ExamState {
   exam: Exam;
@@ -12,6 +13,7 @@ interface ExamState {
   sessionDates: string[];
   topicCounts: Map<string, number>;
   dailyTotals: Map<string, number>;
+  lastTopicId: string | null;
 }
 
 function chooseExam(states: ExamState[], date: string, lastExamId: string | null, streak: number): ExamState | null {
@@ -35,8 +37,39 @@ function chooseTopic(state: ExamState) {
   return [...state.exam.topics].sort((a, b) => {
     const aCount = state.topicCounts.get(a.id) ?? 0;
     const bCount = state.topicCounts.get(b.id) ?? 0;
-    return (topicUncertainty(b) * 2.2 - bCount * 0.42) - (topicUncertainty(a) * 2.2 - aCount * 0.42) || a.name.localeCompare(b.name);
+    const method = resolvedLearningMethod(state.exam);
+    const aRepeatPenalty = method === "interleaving" && state.lastTopicId === a.id ? 0.5 : 0;
+    const bRepeatPenalty = method === "interleaving" && state.lastTopicId === b.id ? 0.5 : 0;
+    return (topicUncertainty(b) * 2.2 - bCount * 0.42 - bRepeatPenalty) - (topicUncertainty(a) * 2.2 - aCount * 0.42 - aRepeatPenalty) || a.name.localeCompare(b.name);
   })[0] ?? { id: `${state.exam.id}-general`, name: "Prüfungsstoff", confidence: null };
+}
+
+function freeWindowsForDate(windows: TimeWindow[], date: string, input: PlannerInput): TimeWindow[] {
+  const blocks = (input.calendarItems ?? [])
+    .filter((item) => item.date === date)
+    .map((item) => ({ start: minutesFromTime(item.startTime), end: minutesFromTime(item.startTime) + item.duration }))
+    .sort((a, b) => a.start - b.start);
+  return windows.flatMap((window) => {
+    let segments = [{ start: minutesFromTime(window.start), end: minutesFromTime(window.end) }];
+    for (const block of blocks) {
+      segments = segments.flatMap((segment) => {
+        if (block.end <= segment.start || block.start >= segment.end) return [segment];
+        return [
+          { start: segment.start, end: Math.min(segment.end, block.start) },
+          { start: Math.max(segment.start, block.end), end: segment.end },
+        ].filter((part) => part.end - part.start >= 25);
+      });
+    }
+    return segments.map((segment, index) => ({ id: `${window.id}-free-${index}`, start: timeFromMinutes(segment.start), end: timeFromMinutes(segment.end) }));
+  });
+}
+
+function methodPhase(exam: Exam, daysLeft: number, progress: number, repeat: number) {
+  const method = resolvedLearningMethod(exam);
+  if (method === "active-recall" && repeat > 0) return daysLeft <= 2 ? "simulation" as const : "recall" as const;
+  if (method === "spaced-repetition" && repeat > 0) return daysLeft <= 2 ? "simulation" as const : "review" as const;
+  if (method === "exam-simulation" && (progress >= 0.45 || daysLeft <= 4)) return "simulation" as const;
+  return phaseFor(daysLeft, progress);
 }
 
 export function generateStudyPlan(input: PlannerInput): StudyPlan {
@@ -53,6 +86,7 @@ export function generateStudyPlan(input: PlannerInput): StudyPlan {
       sessionDates: done.map((session) => session.date).sort(),
       topicCounts: new Map(exam.topics.map((topic) => [topic.id, done.filter((session) => session.topicId === topic.id).length])),
       dailyTotals: new Map(),
+      lastTopicId: null,
     };
   });
   const learningSessions: StudySession[] = [];
@@ -69,7 +103,7 @@ export function generateStudyPlan(input: PlannerInput): StudyPlan {
     let lastExamId: string | null = null;
     let streak = 0;
 
-    for (const window of day.windows) {
+    for (const window of freeWindowsForDate(day.windows, date, input)) {
       let cursor = minutesFromTime(window.start);
       const end = minutesFromTime(window.end);
       while (cursor + 25 <= end && dailyLearning < maxDaily) {
@@ -77,14 +111,15 @@ export function generateStudyPlan(input: PlannerInput): StudyPlan {
         if (!state) break;
         const remainingWindow = end - cursor;
         const remainingTarget = state.target - state.planned;
-        const desired = remainingWindow < 45 ? Math.max(25, remainingWindow) : remainingWindow >= 65 ? 50 : 40;
+        const method = resolvedLearningMethod(state.exam);
+        const desired = method === "pomodoro" ? 25 : remainingWindow < 45 ? Math.max(25, remainingWindow) : remainingWindow >= 65 ? 50 : 40;
         const duration = Math.min(desired, remainingTarget, maxDaily - dailyLearning);
         if (duration < 25) break;
         const topic = chooseTopic(state);
         const progress = Math.min(1, state.planned / state.target);
         const daysLeft = Math.max(0, daysBetween(date, state.exam.date));
-        const type = phaseFor(daysLeft, progress);
         const repeat = state.topicCounts.get(topic.id) ?? 0;
+        const type = methodPhase(state.exam, daysLeft, progress, repeat);
         const copy = sessionCopy(state.exam, topic, type, duration);
         const intensity = type === "simulation" || topic.confidence === 1 ? "high" : type === "review" ? "light" : "medium";
         learningSessions.push({
@@ -107,6 +142,7 @@ export function generateStudyPlan(input: PlannerInput): StudyPlan {
         state.dailyTotals.set(date, (state.dailyTotals.get(date) ?? 0) + duration);
         state.sessionDates.push(date);
         state.topicCounts.set(topic.id, repeat + 1);
+        state.lastTopicId = topic.id;
         dailyLearning += duration;
         streak = lastExamId === state.exam.id ? streak + 1 : 1;
         lastExamId = state.exam.id;
@@ -118,7 +154,7 @@ export function generateStudyPlan(input: PlannerInput): StudyPlan {
   }
 
   const preserved = (input.previousSessions ?? []).filter((session) => session.status === "completed" || session.status === "skipped");
-  const sessions = [...preserved, ...addBreaks(learningSessions)].sort((a, b) => `${a.date}${a.startTime}${a.sequence}`.localeCompare(`${b.date}${b.startTime}${b.sequence}`));
+  const sessions = [...preserved, ...addBreaks(learningSessions, input.calendarItems)].sort((a, b) => `${a.date}${a.startTime}${a.sequence}`.localeCompare(`${b.date}${b.startTime}${b.sequence}`));
   return {
     id: `plan-${Date.now()}`,
     generatedAt: new Date().toISOString(),

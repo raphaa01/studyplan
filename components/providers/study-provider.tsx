@@ -5,7 +5,8 @@ import { createDemoData } from "@/lib/demo-data";
 import { generateStudyPlan } from "@/lib/planner";
 import { LocalStorageRepository } from "@/lib/storage/local-storage-repository";
 import { SupabaseStudyRepository } from "@/lib/storage/supabase-study-repository";
-import type { AvailabilityDay, Exam, StudyData, StudySessionFeedback, UserPreferences } from "@/types/study";
+import { normalizeStudyData } from "@/lib/study-data";
+import type { AvailabilityDay, CalendarItem, Exam, StudyData, StudySessionFeedback, UserPreferences } from "@/types/study";
 import { useAccount } from "./account-provider";
 
 type SyncStatus = "idle" | "syncing" | "synced" | "error";
@@ -17,6 +18,9 @@ interface StudyContextValue extends StudyData {
   removeExam: (id: string) => void;
   saveAvailability: (value: AvailabilityDay[]) => void;
   savePreferences: (value: UserPreferences) => void;
+  saveCalendarItem: (value: CalendarItem) => void;
+  removeCalendarItem: (id: string) => void;
+  completeCalendarItem: (id: string) => void;
   completeSession: (sessionId: string, feedback: Omit<StudySessionFeedback, "sessionId" | "completedAt">) => void;
   skipSession: (sessionId: string) => void;
   optimizePlan: () => void;
@@ -51,7 +55,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       cloudRepository.getAll().then(async (stored) => {
         if (!active) return;
         const migration = localRepository.getAll() ?? LocalStorageRepository.findMigrationCandidate();
-        const next = stored ?? migration ?? createDemoData();
+        const next = normalizeStudyData(stored ?? migration ?? createDemoData());
         const initialized = stored
           ? next
           : { ...next, preferences: { ...next.preferences, name: account.name, onboardingCompleted: false } };
@@ -64,7 +68,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
         setLoadedScope(scopeId);
       }).catch(() => {
         if (!active) return;
-        setData(localRepository.getAll() ?? createDemoData());
+        setData(normalizeStudyData(localRepository.getAll() ?? createDemoData()));
         setSyncStatus("error");
         setLoadedScope(scopeId);
       });
@@ -96,6 +100,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       previousSessions: current.plan.sessions,
       feedback: current.feedback,
       preferences: current.preferences,
+      calendarItems: current.calendarItems,
     }),
   }), []);
 
@@ -107,6 +112,9 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
     removeExam: (id) => commit((current) => optimize({ ...current, exams: current.exams.filter((exam) => exam.id !== id) })),
     saveAvailability: (availability) => commit((current) => optimize({ ...current, availability })),
     savePreferences: (preferences) => commit((current) => ({ ...current, preferences })),
+    saveCalendarItem: (calendarItem) => commit((current) => optimize({ ...current, calendarItems: [...current.calendarItems.filter((item) => item.id !== calendarItem.id), calendarItem] })),
+    removeCalendarItem: (id) => commit((current) => optimize({ ...current, calendarItems: current.calendarItems.filter((item) => item.id !== id) })),
+    completeCalendarItem: (id) => commit((current) => ({ ...current, calendarItems: current.calendarItems.map((item) => item.id === id ? { ...item, status: "completed" as const } : item) })),
     completeSession: (sessionId, nextFeedback) => commit((current) => {
       const feedback: StudySessionFeedback = { sessionId, completedAt: new Date().toISOString(), ...nextFeedback };
       const sessions = current.plan.sessions.map((session) => session.id === sessionId ? { ...session, status: "completed" as const } : session);

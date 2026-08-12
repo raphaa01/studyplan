@@ -33,6 +33,12 @@ export function startOfToday(): string {
   return toDateKey(new Date());
 }
 
+export function startOfWeek(value = startOfToday()): string {
+  const date = fromDateKey(value);
+  const mondayOffset = (date.getDay() + 6) % 7;
+  return addDays(value, -mondayOffset);
+}
+
 export function formatGermanDate(value: string, options?: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat("de-DE", options ?? { weekday: "short", day: "2-digit", month: "short" }).format(fromDateKey(value));
 }

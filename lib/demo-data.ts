@@ -1,4 +1,4 @@
-import type { AvailabilityDay, Exam, StudyData, UserPreferences } from "@/types/study";
+import type { AvailabilityDay, CalendarItem, Exam, StudyData, UserPreferences } from "@/types/study";
 import { addDays, startOfToday } from "./planner/date-utils";
 import { generateStudyPlan } from "./planner";
 
@@ -35,6 +35,7 @@ export function createDemoExams(today = startOfToday()): Exam[] {
       importance: 5,
       estimatedHours: null,
       color: colors[0],
+      learningMethod: "auto",
       topics: [
         { id: "math-1", name: "Ableitungen", confidence: 3 },
         { id: "math-2", name: "Extrempunkte", confidence: 2 },
@@ -52,6 +53,7 @@ export function createDemoExams(today = startOfToday()): Exam[] {
       importance: 3,
       estimatedHours: null,
       color: colors[1],
+      learningMethod: "auto",
       topics: [
         { id: "bio-1", name: "DNA-Replikation", confidence: 3 },
         { id: "bio-2", name: "Proteinbiosynthese", confidence: 2 },
@@ -67,6 +69,7 @@ export function createDemoExams(today = startOfToday()): Exam[] {
       importance: 2,
       estimatedHours: null,
       color: colors[2],
+      learningMethod: "auto",
       topics: [
         { id: "history-1", name: "Weimarer Republik", confidence: 3 },
         { id: "history-2", name: "Ursachen 1933", confidence: null },
@@ -77,8 +80,12 @@ export function createDemoExams(today = startOfToday()): Exam[] {
 
 export function createDemoData(today = startOfToday()): StudyData {
   const exams = createDemoExams(today);
-  const plan = generateStudyPlan({ availability: demoAvailability, exams, preferences: defaultPreferences, now: today });
-  return { preferences: defaultPreferences, availability: demoAvailability, exams, plan, feedback: [] };
+  const calendarItems: CalendarItem[] = [
+    { id: "calendar-demo-1", title: "Training", date: addDays(today, 2), startTime: "17:00", duration: 60, kind: "appointment", status: "planned", notes: "Fester Termin" },
+    { id: "calendar-demo-2", title: "Formelsammlung ordnen", date: today, startTime: "19:00", duration: 25, kind: "todo", status: "planned" },
+  ];
+  const plan = generateStudyPlan({ availability: demoAvailability, exams, preferences: defaultPreferences, calendarItems, now: today });
+  return { preferences: defaultPreferences, availability: demoAvailability, exams, plan, feedback: [], calendarItems };
 }
 
 export const subjectColors = colors;
