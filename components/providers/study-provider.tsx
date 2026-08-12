@@ -6,7 +6,7 @@ import { generateStudyPlan } from "@/lib/planner";
 import { LocalStorageRepository } from "@/lib/storage/local-storage-repository";
 import { SupabaseStudyRepository } from "@/lib/storage/supabase-study-repository";
 import { normalizeStudyData } from "@/lib/study-data";
-import type { AvailabilityDay, CalendarItem, Exam, StudyData, StudySessionFeedback, UserPreferences } from "@/types/study";
+import type { AvailabilityDay, CalendarItem, Exam, LearningSessionProgress, StudyData, StudySessionFeedback, UserPreferences } from "@/types/study";
 import { useAccount } from "./account-provider";
 
 type SyncStatus = "idle" | "syncing" | "synced" | "error";
@@ -21,6 +21,8 @@ interface StudyContextValue extends StudyData {
   saveCalendarItem: (value: CalendarItem) => void;
   removeCalendarItem: (id: string) => void;
   completeCalendarItem: (id: string) => void;
+  saveLearningProgress: (value: LearningSessionProgress) => void;
+  clearLearningProgress: (sessionId: string) => void;
   completeSession: (sessionId: string, feedback: Omit<StudySessionFeedback, "sessionId" | "completedAt">) => void;
   skipSession: (sessionId: string) => void;
   optimizePlan: () => void;
@@ -115,6 +117,12 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
     saveCalendarItem: (calendarItem) => commit((current) => optimize({ ...current, calendarItems: [...current.calendarItems.filter((item) => item.id !== calendarItem.id), calendarItem] })),
     removeCalendarItem: (id) => commit((current) => optimize({ ...current, calendarItems: current.calendarItems.filter((item) => item.id !== id) })),
     completeCalendarItem: (id) => commit((current) => ({ ...current, calendarItems: current.calendarItems.map((item) => item.id === id ? { ...item, status: "completed" as const } : item) })),
+    saveLearningProgress: (progress) => commit((current) => ({ ...current, learningProgress: { ...current.learningProgress, [progress.sessionId]: progress } })),
+    clearLearningProgress: (sessionId) => commit((current) => {
+      const learningProgress = { ...current.learningProgress };
+      delete learningProgress[sessionId];
+      return { ...current, learningProgress };
+    }),
     completeSession: (sessionId, nextFeedback) => commit((current) => {
       const feedback: StudySessionFeedback = { sessionId, completedAt: new Date().toISOString(), ...nextFeedback };
       const sessions = current.plan.sessions.map((session) => session.id === sessionId ? { ...session, status: "completed" as const } : session);
@@ -122,7 +130,9 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       const exams = topicId && nextFeedback.confidence
         ? current.exams.map((exam) => ({ ...exam, topics: exam.topics.map((topic) => topic.id === topicId ? { ...topic, confidence: nextFeedback.confidence } : topic) }))
         : current.exams;
-      return { ...current, exams, feedback: [...current.feedback.filter((item) => item.sessionId !== sessionId), feedback], plan: { ...current.plan, sessions } };
+      const learningProgress = { ...current.learningProgress };
+      delete learningProgress[sessionId];
+      return { ...current, exams, learningProgress, feedback: [...current.feedback.filter((item) => item.sessionId !== sessionId), feedback], plan: { ...current.plan, sessions } };
     }),
     skipSession: (sessionId) => commit((current) => ({ ...current, plan: { ...current.plan, sessions: current.plan.sessions.map((session) => session.id === sessionId ? { ...session, status: "skipped" as const } : session) } })),
     optimizePlan: () => commit(optimize),
