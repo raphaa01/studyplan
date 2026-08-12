@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, ListTodo, MapPin, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Check, ListTodo, MapPin, Play, Trash2 } from "lucide-react";
 import { formatGermanDate, minutesFromTime, timeFromMinutes } from "@/lib/planner";
 import type { CalendarItem, Exam, StudySession } from "@/types/study";
 import { useStudy } from "./providers/study-provider";
@@ -42,6 +43,7 @@ export function WeekTimeline({ days, sessions, exams, selectedDay, onSelectDay }
 function CalendarBlock({ item, top, height, onRemove }: { item: CalendarItem; top: number; height: number; onRemove: () => void }) {
   return <div className={`week-block week-personal-block ${item.kind} ${item.status === "completed" ? "done" : ""}`} style={{ top, height }}>
     <span>{item.startTime}</span><strong>{item.kind === "appointment" ? <MapPin size={11} /> : <ListTodo size={11} />}{item.title}</strong>{item.status === "completed" && <Check size={12} />}
+    {item.kind === "todo" && item.status !== "completed" && height > 42 && <Link className="week-todo-focus" aria-label={`${item.title} fokussiert bearbeiten`} href={`/todo/${item.id}`}><Play size={10} />Fokus</Link>}
     <button aria-label={`${item.title} löschen`} onClick={(event) => { event.stopPropagation(); onRemove(); }}><Trash2 size={12} /></button>
   </div>;
 }

@@ -3,20 +3,15 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, CircleHelp, Clock3, Pause, Play, RotateCcw, TimerReset } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, CircleHelp, Clock3 } from "lucide-react";
 import { useStudy } from "./providers/study-provider";
 import { Button } from "./ui/button";
+import { FocusTimer } from "./focus-timer";
 import { createLearningProgress, createLearningSessionContent, remainingLearningSeconds } from "@/lib/learning-session";
 import { learningMethods, resolvedLearningMethod } from "@/lib/learning-methods";
 import type { Confidence, LearningSessionProgress } from "@/types/study";
 
 const stageLabels = ["Aufgaben", "Active Recall", "Lernkarten", "Abschluss"];
-
-function formatTimer(totalSeconds: number) {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
 
 export function LearningMode({ sessionId }: { sessionId: string }) {
   const router = useRouter();
@@ -44,7 +39,6 @@ export function LearningMode({ sessionId }: { sessionId: string }) {
   const content = createLearningSessionContent(session, exam, topic);
   const remaining = remainingLearningSeconds(progress, nowMs);
   const durationSeconds = session.duration * 60;
-  const elapsedPercent = Math.min(100, Math.max(0, (1 - remaining / durationSeconds) * 100));
   const method = learningMethods.find((item) => item.id === resolvedLearningMethod(exam));
 
   function persist(patch: Partial<LearningSessionProgress>) {
@@ -80,7 +74,7 @@ export function LearningMode({ sessionId }: { sessionId: string }) {
     <nav className="learning-steps" aria-label="Lernphasen">{stageLabels.map((label, index) => <button key={label} className={`${progress.stage === index ? "active" : ""} ${progress.stage > index ? "complete" : ""}`} onClick={() => changeStage(index as 0 | 1 | 2 | 3)}><span>{progress.stage > index ? <Check size={13} /> : index + 1}</span>{label}</button>)}</nav>
 
     <div className="learning-layout">
-      <aside className="timer-panel"><div className="learning-timer" style={{ "--timer-progress": `${elapsedPercent}%`, "--subject-color": exam.color } as React.CSSProperties}><div><span>{remaining === 0 ? "Zeit ist um" : progress.runningSince ? "Fokus läuft" : "Bereit"}</span><strong>{formatTimer(remaining)}</strong><small>von {session.duration} Minuten</small></div></div><div className="timer-actions"><Button onClick={toggleTimer}>{progress.runningSince ? <><Pause size={16} />Pausieren</> : remaining === 0 ? <><RotateCcw size={16} />Noch einmal</> : <><Play size={16} />{remaining < durationSeconds ? "Fortsetzen" : "Fokus starten"}</>}</Button><button aria-label="Timer zurücksetzen" onClick={resetTimer}><TimerReset size={17} /></button></div><div className="session-brief"><span>Ziel dieser Einheit</span><p>{session.description}</p></div><div className="quiet-tip"><CircleHelp size={15} /><p>Versuche zuerst selbst zu antworten. Das Gefühl von Anstrengung ist beim aktiven Abruf normal.</p></div></aside>
+      <aside className="timer-panel"><FocusTimer remaining={remaining} durationSeconds={durationSeconds} running={Boolean(progress.runningSince)} accent={exam.color} onToggle={toggleTimer} onReset={resetTimer} /><div className="session-brief"><span>Ziel dieser Einheit</span><p>{session.description}</p></div><div className="quiet-tip"><CircleHelp size={15} /><p>Versuche zuerst selbst zu antworten. Das Gefühl von Anstrengung ist beim aktiven Abruf normal.</p></div></aside>
 
       <main className="learning-workspace">
         {progress.stage === 0 && <section className="learning-stage"><p className="eyebrow">Konkreter Ablauf</p><h1>Arbeite Schritt für Schritt.</h1><p className="learning-lead">Nicht alles gleichzeitig. Hake jeden Schritt ab, sobald er wirklich erledigt ist.</p><div className="task-checklist">{content.tasks.map((task, index) => { const checked = progress.checkedTaskIds.includes(task.id); return <button key={task.id} className={checked ? "checked" : ""} onClick={() => persist({ checkedTaskIds: checked ? progress.checkedTaskIds.filter((id) => id !== task.id) : [...progress.checkedTaskIds, task.id] })}><span>{checked ? <Check size={16} /> : index + 1}</span><p>{task.text}</p></button>; })}</div><StageNext onClick={() => changeStage(1)} label="Weiter zu Active Recall" /></section>}

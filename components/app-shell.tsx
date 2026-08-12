@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const authRoute = pathname === "/login" || pathname === "/signup";
   const setupRoute = pathname === "/onboarding";
-  const learningRoute = pathname.startsWith("/learn/");
+  const focusRoute = pathname.startsWith("/learn/") || pathname.startsWith("/todo/");
 
   useEffect(() => {
     if (!accountHydrated || authRoute) return;
@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (authRoute || setupRoute) return <>{children}</>;
   if (!accountHydrated || !account || !preferences.onboardingCompleted) return <div className="app-loading"><span className="brand-mark">F</span><p>Fokusplan wird geöffnet …</p></div>;
-  if (learningRoute) return <main className="learning-shell">{children}</main>;
+  if (focusRoute) return <main className="learning-shell">{children}</main>;
   return (
     <div className="app-shell">
       <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
