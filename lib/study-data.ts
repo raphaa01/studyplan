@@ -13,5 +13,6 @@ export function normalizeStudyData(value: StudyData | null | undefined): StudyDa
     plan: value.plan ?? fallback.plan,
     feedback: value.feedback ?? [],
     calendarItems: value.calendarItems ?? [],
+    learningProgress: value.learningProgress ?? {},
   };
 }

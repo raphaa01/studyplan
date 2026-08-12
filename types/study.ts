@@ -88,6 +88,17 @@ export interface StudySessionFeedback {
   completedAt: string;
 }
 
+export interface LearningSessionProgress {
+  sessionId: string;
+  remainingSeconds: number;
+  runningSince: string | null;
+  stage: 0 | 1 | 2 | 3;
+  checkedTaskIds: string[];
+  revealedRecallIds: string[];
+  reflection: string;
+  updatedAt: string;
+}
+
 export interface StudyPlan {
   id: string;
   generatedAt: string;
@@ -103,6 +114,7 @@ export interface StudyData {
   plan: StudyPlan;
   feedback: StudySessionFeedback[];
   calendarItems: CalendarItem[];
+  learningProgress: Record<string, LearningSessionProgress>;
 }
 
 export interface PlannerInput {
