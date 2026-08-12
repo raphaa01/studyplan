@@ -99,6 +99,13 @@ export interface LearningSessionProgress {
   updatedAt: string;
 }
 
+export interface TodoFocusProgress {
+  itemId: string;
+  remainingSeconds: number;
+  runningSince: string | null;
+  updatedAt: string;
+}
+
 export interface StudyPlan {
   id: string;
   generatedAt: string;
@@ -115,6 +122,7 @@ export interface StudyData {
   feedback: StudySessionFeedback[];
   calendarItems: CalendarItem[];
   learningProgress: Record<string, LearningSessionProgress>;
+  todoFocusProgress: Record<string, TodoFocusProgress>;
 }
 
 export interface PlannerInput {

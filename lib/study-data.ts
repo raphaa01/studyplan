@@ -14,5 +14,6 @@ export function normalizeStudyData(value: StudyData | null | undefined): StudyDa
     feedback: value.feedback ?? [],
     calendarItems: value.calendarItems ?? [],
     learningProgress: value.learningProgress ?? {},
+    todoFocusProgress: value.todoFocusProgress ?? {},
   };
 }
