@@ -6,6 +6,7 @@ import { generateStudyPlan } from "@/lib/planner";
 import { LocalStorageRepository } from "@/lib/storage/local-storage-repository";
 import { SupabaseStudyRepository } from "@/lib/storage/supabase-study-repository";
 import { normalizeStudyData } from "@/lib/study-data";
+import { appendActivityRecord, createStudyActivity, createTodoActivity } from "@/lib/statistics";
 import type { AvailabilityDay, CalendarItem, Exam, LearningSessionProgress, StudyData, StudySessionFeedback, TodoFocusProgress, UserPreferences } from "@/types/study";
 import { useAccount } from "./account-provider";
 
@@ -123,9 +124,14 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       return optimize({ ...current, todoFocusProgress, calendarItems: current.calendarItems.filter((item) => item.id !== id) });
     }),
     completeCalendarItem: (id) => commit((current) => {
+      const calendarItem = current.calendarItems.find((item) => item.id === id);
+      const completedAt = new Date().toISOString();
       const todoFocusProgress = { ...current.todoFocusProgress };
       delete todoFocusProgress[id];
-      return { ...current, todoFocusProgress, calendarItems: current.calendarItems.map((item) => item.id === id ? { ...item, status: "completed" as const } : item) };
+      const activityLog = calendarItem?.kind === "todo" && calendarItem.status !== "completed"
+        ? appendActivityRecord(current.activityLog, createTodoActivity(calendarItem, completedAt))
+        : current.activityLog;
+      return { ...current, activityLog, todoFocusProgress, calendarItems: current.calendarItems.map((item) => item.id === id ? { ...item, status: "completed" as const, completedAt } : item) };
     }),
     saveLearningProgress: (progress) => commit((current) => ({ ...current, learningProgress: { ...current.learningProgress, [progress.sessionId]: progress } })),
     clearLearningProgress: (sessionId) => commit((current) => {
@@ -140,7 +146,9 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       return { ...current, todoFocusProgress };
     }),
     completeSession: (sessionId, nextFeedback) => commit((current) => {
-      const feedback: StudySessionFeedback = { sessionId, completedAt: new Date().toISOString(), ...nextFeedback };
+      const completedAt = new Date().toISOString();
+      const completedSession = current.plan.sessions.find((session) => session.id === sessionId);
+      const feedback: StudySessionFeedback = { sessionId, completedAt, ...nextFeedback };
       const sessions = current.plan.sessions.map((session) => session.id === sessionId ? { ...session, status: "completed" as const } : session);
       const topicId = sessions.find((session) => session.id === sessionId)?.topicId;
       const exams = topicId && nextFeedback.confidence
@@ -148,7 +156,11 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
         : current.exams;
       const learningProgress = { ...current.learningProgress };
       delete learningProgress[sessionId];
-      return { ...current, exams, learningProgress, feedback: [...current.feedback.filter((item) => item.sessionId !== sessionId), feedback], plan: { ...current.plan, sessions } };
+      const exam = current.exams.find((item) => item.id === completedSession?.examId);
+      const activityLog = completedSession && completedSession.type !== "break" && completedSession.status !== "completed"
+        ? appendActivityRecord(current.activityLog, createStudyActivity(completedSession, exam, completedAt))
+        : current.activityLog;
+      return { ...current, activityLog, exams, learningProgress, feedback: [...current.feedback.filter((item) => item.sessionId !== sessionId), feedback], plan: { ...current.plan, sessions } };
     }),
     skipSession: (sessionId) => commit((current) => ({ ...current, plan: { ...current.plan, sessions: current.plan.sessions.map((session) => session.id === sessionId ? { ...session, status: "skipped" as const } : session) } })),
     optimizePlan: () => commit(optimize),
