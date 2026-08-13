@@ -12,6 +12,7 @@ export type SessionStatus = "planned" | "completed" | "missed" | "skipped";
 export type LearningMethodId = "auto" | "active-recall" | "spaced-repetition" | "interleaving" | "pomodoro" | "exam-simulation";
 export type CalendarItemKind = "appointment" | "todo";
 export type CalendarItemStatus = "planned" | "completed";
+export type ActivityKind = "study" | "todo";
 
 export interface TimeWindow {
   id: string;
@@ -62,7 +63,18 @@ export interface CalendarItem {
   duration: number;
   kind: CalendarItemKind;
   status: CalendarItemStatus;
+  completedAt?: string;
   notes?: string;
+}
+
+export interface ActivityRecord {
+  id: string;
+  sourceId: string;
+  kind: ActivityKind;
+  title: string;
+  subject?: string;
+  durationMinutes: number;
+  completedAt: string;
 }
 
 export interface StudySession {
@@ -123,6 +135,7 @@ export interface StudyData {
   calendarItems: CalendarItem[];
   learningProgress: Record<string, LearningSessionProgress>;
   todoFocusProgress: Record<string, TodoFocusProgress>;
+  activityLog: ActivityRecord[];
 }
 
 export interface PlannerInput {

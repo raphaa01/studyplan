@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, BookOpenCheck, BrainCircuit, CalendarDays, Clock3, GraduationCap, Menu, Plus, Settings, X } from "lucide-react";
+import { BarChart3, BookOpenCheck, BrainCircuit, CalendarDays, ChartNoAxesCombined, Clock3, GraduationCap, Menu, Plus, Settings, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useStudy } from "./providers/study-provider";
 import { useAccount } from "./providers/account-provider";
@@ -10,6 +10,7 @@ import { useAccount } from "./providers/account-provider";
 const navigation = [
   { href: "/", label: "Übersicht", icon: BarChart3 },
   { href: "/plan", label: "Lernplan", icon: CalendarDays },
+  { href: "/statistics", label: "Statistiken", icon: ChartNoAxesCombined },
   { href: "/exams", label: "Prüfungen", icon: BookOpenCheck },
   { href: "/methods", label: "Lernmethoden", icon: BrainCircuit },
   { href: "/availability", label: "Lernzeiten", icon: Clock3 },
