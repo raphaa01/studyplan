@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, CircleHelp, Cl
 import { useStudy } from "./providers/study-provider";
 import { Button } from "./ui/button";
 import { FocusTimer } from "./focus-timer";
+import { BambooGrove } from "./bamboo-grove";
 import { createLearningProgress, createLearningSessionContent, remainingLearningSeconds } from "@/lib/learning-session";
 import { learningMethods, resolvedLearningMethod } from "@/lib/learning-methods";
 import type { Confidence, LearningSessionProgress } from "@/types/study";
@@ -70,6 +71,7 @@ export function LearningMode({ sessionId }: { sessionId: string }) {
   }
 
   return <div className="learning-mode">
+    <BambooGrove running={Boolean(progress.runningSince)} />
     <header className="learning-header"><Link href="/" className="learn-back"><ArrowLeft size={16} />Einheit verlassen</Link><div className="learning-title"><i style={{ background: exam.color }} /><span><small>{exam.subject} · {method?.name}</small><strong>{session.title}</strong></span></div><span className="learning-sync">Fortschritt wird gespeichert</span></header>
     <nav className="learning-steps" aria-label="Lernphasen">{stageLabels.map((label, index) => <button key={label} className={`${progress.stage === index ? "active" : ""} ${progress.stage > index ? "complete" : ""}`} onClick={() => changeStage(index as 0 | 1 | 2 | 3)}><span>{progress.stage > index ? <Check size={13} /> : index + 1}</span>{label}</button>)}</nav>
 

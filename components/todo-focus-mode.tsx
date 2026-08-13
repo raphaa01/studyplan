@@ -7,6 +7,7 @@ import { ArrowLeft, Check, CircleHelp, Clock3, ListTodo } from "lucide-react";
 import { createTodoFocusProgress, remainingFocusSeconds } from "@/lib/focus-timer";
 import type { TodoFocusProgress } from "@/types/study";
 import { FocusTimer } from "./focus-timer";
+import { BambooGrove } from "./bamboo-grove";
 import { useStudy } from "./providers/study-provider";
 import { Button } from "./ui/button";
 
@@ -48,6 +49,7 @@ export function TodoFocusMode({ itemId }: { itemId: string }) {
   }
 
   return <div className="learning-mode todo-focus-mode">
+    <BambooGrove running={Boolean(progress.runningSince)} />
     <header className="learning-header todo-focus-header"><Link href="/" className="learn-back"><ArrowLeft size={16} />Fokus verlassen</Link><div className="learning-title"><i /><span><small>Persönliches To-do</small><strong>{item.title}</strong></span></div><span className="learning-sync">Fortschritt wird gespeichert</span></header>
     <main className="todo-focus-canvas">
       <section className="todo-focus-card">
