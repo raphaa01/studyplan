@@ -414,13 +414,31 @@ input::placeholder { color: #b0b4ad; }
 .learning-layout { max-width: 1160px; margin: 22px auto 0; padding: 0 26px 70px; display: grid; grid-template-columns: 310px minmax(0,1fr); gap: 20px; align-items: start; }
 .timer-panel { position: sticky; top: 102px; padding: 28px; border: 1px solid rgba(53,65,50,.1); border-radius: 20px; background: rgba(255,255,255,.9); box-shadow: 0 18px 50px rgba(37,48,34,.07); }
 .focus-timer-control { min-width: 0; }
-.learning-timer { width: 210px; height: 210px; margin: 0 auto 22px; border-radius: 50%; background: conic-gradient(var(--subject-color) var(--timer-progress), #e8eae4 0); display: grid; place-items: center; position: relative; }
+.focus-visuals { margin-bottom: 22px; display: grid; grid-template-columns: minmax(0,1fr) 62px; gap: 10px; align-items: end; }
+.learning-timer { width: 178px; height: 178px; margin: 0; border-radius: 50%; background: conic-gradient(var(--subject-color) var(--timer-progress), #e8eae4 0); display: grid; place-items: center; position: relative; }
 .learning-timer::after { content: ""; position: absolute; inset: 10px; border-radius: 50%; background: linear-gradient(145deg,#fff,#f8f9f5); box-shadow: inset 0 0 0 1px rgba(53,65,50,.05), 0 12px 24px rgba(45,54,42,.08); }
 .learning-timer > div { position: relative; z-index: 1; text-align: center; }
 .learning-timer span, .learning-timer strong, .learning-timer small { display: block; }
 .learning-timer span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
-.learning-timer strong { margin: 7px 0 4px; font-family: var(--font-geist-mono), monospace; font-size: 38px; letter-spacing: -.05em; font-weight: 560; font-variant-numeric: tabular-nums; }
+.learning-timer strong { margin: 7px 0 4px; font-family: var(--font-geist-mono), monospace; font-size: 32px; letter-spacing: -.05em; font-weight: 560; font-variant-numeric: tabular-nums; }
 .learning-timer small { color: var(--faint); font-size: 9px; }
+.bamboo-progress { min-width: 0; color: #476b4d; text-align: center; }
+.bamboo-stage { width: 62px; height: 178px; margin: 0 auto; position: relative; }
+.bamboo-plant { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.bamboo-plant path { vector-effect: non-scaling-stroke; }
+.bamboo-stem, .bamboo-branch, .bamboo-node, .bamboo-ground { fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; }
+.bamboo-stem { stroke-width: 5; }
+.bamboo-node { stroke-width: 2.1; }
+.bamboo-branch { stroke-width: 2.3; }
+.bamboo-ground { stroke-width: 2; }
+.bamboo-leaf { fill: currentColor; stroke: none; }
+.bamboo-ghost { color: #dfe5dd; opacity: .75; }
+.bamboo-grown { color: #4b7152; filter: drop-shadow(0 5px 5px rgba(58,89,63,.12)); }
+.bamboo-progress-fill { position: absolute; inset: 0; transform-origin: 50% 100%; }
+.bamboo-progress.is-running .bamboo-progress-fill { animation: bamboo-breathe 3.8s ease-in-out infinite; }
+.bamboo-progress > span { min-height: 11px; margin-top: 6px; color: #708074; display: block; font-size: 7px; font-weight: 650; letter-spacing: .04em; white-space: nowrap; }
+@keyframes bamboo-breathe { 0%,100% { transform: rotate(-.5deg); } 50% { transform: rotate(1deg); } }
+@media (prefers-reduced-motion: reduce) { .bamboo-progress.is-running .bamboo-progress-fill { animation: none; } }
 .timer-actions { display: grid; grid-template-columns: 1fr 38px; gap: 7px; }
 .timer-actions > button:last-child { border: 1px solid var(--line-strong); border-radius: 7px; background: white; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
 .session-brief { margin-top: 24px; padding-top: 19px; border-top: 1px solid var(--line); }
@@ -490,7 +508,9 @@ input::placeholder { color: #b0b4ad; }
 .todo-focus-meta { padding-top: 20px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 15px 22px; color: var(--muted); font-size: 10px; }
 .todo-focus-meta span { display: flex; align-items: center; gap: 6px; }
 .todo-focus-timer { padding: 30px 25px; border-radius: 20px; background: #faf8f5; box-shadow: inset 0 0 0 1px rgba(119,93,74,.08); }
-.todo-focus-timer .learning-timer { width: 230px; height: 230px; }
+.todo-focus-timer .focus-visuals { grid-template-columns: minmax(0,1fr) 68px; gap: 12px; }
+.todo-focus-timer .learning-timer { width: 190px; height: 190px; }
+.todo-focus-timer .bamboo-stage { width: 68px; height: 190px; }
 .todo-finish-card { margin-top: 14px; padding: 20px 24px; border: 1px solid rgba(53,65,50,.1); border-radius: 16px; background: rgba(255,255,255,.72); display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .todo-finish-card span, .todo-finish-card strong { display: block; }
 .todo-finish-card span { margin-bottom: 4px; color: var(--faint); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
@@ -504,8 +524,10 @@ input::placeholder { color: #b0b4ad; }
   .learning-sync { display: none; }
   .learning-layout { grid-template-columns: 1fr; }
   .timer-panel { position: static; }
-  .focus-timer-control { display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 20px; align-items: center; }
+  .focus-timer-control { display: grid; grid-template-columns: 222px minmax(0,1fr); gap: 18px; align-items: center; }
+  .focus-visuals { margin-bottom: 0; grid-template-columns: 150px 58px; gap: 10px; }
   .learning-timer { width: 145px; height: 145px; margin: 0; }
+  .bamboo-stage { width: 58px; height: 145px; }
   .learning-timer strong { font-size: 28px; }
   .timer-actions { grid-template-columns: minmax(0,1fr) 38px; }
   .session-brief { margin: 13px 0 0; padding-top: 13px; }
@@ -513,7 +535,9 @@ input::placeholder { color: #b0b4ad; }
   .todo-focus-card { grid-template-columns: 1fr; }
   .todo-focus-timer { max-width: 430px; width: 100%; }
   .todo-focus-timer .focus-timer-control { display: block; }
-  .todo-focus-timer .learning-timer { width: 210px; height: 210px; margin: 0 auto 22px; }
+  .todo-focus-timer .focus-visuals { margin-bottom: 22px; grid-template-columns: 190px 68px; justify-content: center; }
+  .todo-focus-timer .learning-timer { width: 190px; height: 190px; margin: 0; }
+  .todo-focus-timer .bamboo-stage { width: 68px; height: 190px; }
 }
 
 @media (max-width: 580px) {
@@ -524,8 +548,11 @@ input::placeholder { color: #b0b4ad; }
   .learning-steps button > span { font-size: 9px; }
   .learning-layout { margin-top: 13px; padding: 0 12px 40px; }
   .timer-panel { padding: 17px; }
-  .focus-timer-control { grid-template-columns: 108px minmax(0,1fr); gap: 13px; }
+  .focus-timer-control { display: block; }
+  .focus-visuals { margin-bottom: 14px; grid-template-columns: 108px 50px; gap: 8px; justify-content: center; }
   .learning-timer { width: 106px; height: 106px; }
+  .bamboo-stage { width: 50px; height: 106px; }
+  .bamboo-progress > span { display: none; }
   .learning-timer span, .learning-timer small { display: none; }
   .learning-timer strong { margin: 0; font-size: 22px; }
   .session-brief { display: none; }
@@ -538,7 +565,9 @@ input::placeholder { color: #b0b4ad; }
   .todo-focus-copy h1 { font-size: 39px; }
   .todo-focus-copy > p { font-size: 12px; }
   .todo-focus-timer { padding: 23px 17px; }
-  .todo-focus-timer .learning-timer { width: 190px; height: 190px; }
+  .todo-focus-timer .focus-visuals { grid-template-columns: 180px 62px; gap: 8px; }
+  .todo-focus-timer .learning-timer { width: 180px; height: 180px; }
+  .todo-focus-timer .bamboo-stage { width: 62px; height: 180px; }
   .todo-focus-timer .learning-timer span, .todo-focus-timer .learning-timer small { display: block; }
   .todo-focus-timer .learning-timer strong { margin: 7px 0 4px; font-size: 32px; }
   .todo-finish-card { align-items: stretch; flex-direction: column; }
