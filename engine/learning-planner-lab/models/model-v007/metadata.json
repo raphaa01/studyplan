@@ -1,0 +1,48 @@
+{
+  "id": "model-v007",
+  "parent_model": "model-v006",
+  "architecture": "SharedExamMLP-64",
+  "parameters": 25123,
+  "reward_version": "2.0",
+  "training_steps": 10000000,
+  "training_episodes": 507593,
+  "training_duration_seconds": 6494.880170100001,
+  "seed": 42,
+  "best_validation_reward": 65.7964336267252,
+  "best_step": 7700096,
+  "selected_best_checkpoint": true,
+  "evaluation_score": 60.611482843876765,
+  "fresh_test_score": 61.362537929192655,
+  "evaluation_samples": 1000,
+  "fresh_test_samples": 250,
+  "greedy_baseline_score": 57.58400122090679,
+  "pytorch": {
+    "file": "model.pt",
+    "size_bytes": 322223,
+    "sha256": "0cdc0bfe51ab6c0b0f12ec9d2347694c19f680db6a2ec33832b994b46622c4de"
+  },
+  "onnx": {
+    "file": "model.onnx",
+    "size_bytes": 107845,
+    "sha256": "4b56cc1fcef15be2f27e73b1d03814c49062c528cc81b035770636d2e9927b97",
+    "loadable": true,
+    "max_logits_error": 9.5367431640625e-7,
+    "max_value_error": 1.3113021850585938e-6
+  },
+  "hyperparameters": {
+    "rollout_steps": 128,
+    "parallel_envs": 8,
+    "batch_size": 128,
+    "learning_rate": 0.0003,
+    "gamma": 0.99,
+    "gae_lambda": 0.95,
+    "clip_range": 0.2,
+    "entropy_coef": 0.02,
+    "value_coef": 0.5,
+    "epochs": 4,
+    "curriculum": true,
+    "validation_size": 64,
+    "adaptive_learning_rate": true,
+    "min_learning_rate": 0.00001
+  }
+}

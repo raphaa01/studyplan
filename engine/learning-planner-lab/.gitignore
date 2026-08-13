@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+test-runtime/
+.mypy_cache/
+frontend/node_modules/
+frontend/dist/
+.pnpm-store/
+*.tsbuildinfo
+data/evaluation_set.json
+data/baseline_evaluation.json
+data/registry.json
+models/model-v*/
+runs/run-*/
+*.log
+.DS_Store

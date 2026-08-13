@@ -1,0 +1,10 @@
+[project]
+name = "learning-planner-lab"
+version = "0.2.0"
+description = "Local reinforcement-learning laboratory for intelligent study-time planning"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
+addopts = "-q"
