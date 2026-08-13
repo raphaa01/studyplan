@@ -14,9 +14,15 @@ export function WeekTimeline({ days, sessions, exams, selectedDay, onSelectDay }
   const { calendarItems, removeCalendarItem } = useStudy();
   const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, index) => START_HOUR + index);
   const gridHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
+  const entryCounts = new Map(days.map((day) => [day, 0]));
+  for (const session of sessions) if (entryCounts.has(session.date)) entryCounts.set(session.date, (entryCounts.get(session.date) ?? 0) + 1);
+  for (const item of calendarItems) if (entryCounts.has(item.date)) entryCounts.set(item.date, (entryCounts.get(item.date) ?? 0) + 1);
 
   return <div className="week-timeline-shell">
-    <div className="week-timeline-header"><span />{days.map((day) => <button key={day} className={day === selectedDay ? "active" : ""} onClick={() => onSelectDay(day)}><span>{formatGermanDate(day, { weekday: "short" })}</span><strong>{formatGermanDate(day, { day: "2-digit" })}</strong></button>)}</div>
+    <div className="week-timeline-header" aria-label="Tag auswählen"><span />{days.map((day) => {
+      const entryCount = entryCounts.get(day) ?? 0;
+      return <button key={day} aria-pressed={day === selectedDay} aria-label={`${formatGermanDate(day, { weekday: "long", day: "numeric", month: "long" })}, ${entryCount ? `${entryCount} Einträge` : "frei"}`} className={day === selectedDay ? "active" : ""} onClick={() => onSelectDay(day)}><span>{formatGermanDate(day, { weekday: "short" })}</span><strong>{formatGermanDate(day, { day: "2-digit" })}</strong>{entryCount > 0 && <i aria-hidden="true" />}</button>;
+    })}</div>
     <div className="week-timeline-scroll">
       <div className="week-time-axis" style={{ height: gridHeight }}>{hours.slice(0, -1).map((hour) => <span key={hour} style={{ top: (hour - START_HOUR) * HOUR_HEIGHT }}>{timeFromMinutes(hour * 60)}</span>)}</div>
       <div className="week-columns">{days.map((day) => {
