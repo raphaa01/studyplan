@@ -16,6 +16,20 @@ interface ExamState {
   lastTopicId: string | null;
 }
 
+export interface PlannerAllocation {
+  slots: Map<string, string | null>;
+  inferenceMs: number;
+  modelSha256: string;
+}
+
+export interface PlannerOptions {
+  allocation?: PlannerAllocation;
+}
+
+export function plannerSlotKey(date: string, startMinute: number): string {
+  return `${date}:${startMinute}`;
+}
+
 function chooseExam(states: ExamState[], date: string, lastExamId: string | null, streak: number): ExamState | null {
   const eligible = states.filter(({ exam, planned, target, dailyTotals }) => {
     const daysLeft = daysBetween(date, exam.date);
@@ -44,7 +58,7 @@ function chooseTopic(state: ExamState) {
   })[0] ?? { id: `${state.exam.id}-general`, name: "Prüfungsstoff", confidence: null };
 }
 
-function freeWindowsForDate(windows: TimeWindow[], date: string, input: PlannerInput): TimeWindow[] {
+export function freeWindowsForDate(windows: TimeWindow[], date: string, input: PlannerInput): TimeWindow[] {
   const blocks = (input.calendarItems ?? [])
     .filter((item) => item.date === date)
     .map((item) => ({ start: minutesFromTime(item.startTime), end: minutesFromTime(item.startTime) + item.duration }))
@@ -72,7 +86,7 @@ function methodPhase(exam: Exam, daysLeft: number, progress: number, repeat: num
   return phaseFor(daysLeft, progress);
 }
 
-export function generateStudyPlan(input: PlannerInput): StudyPlan {
+export function generateStudyPlan(input: PlannerInput, options: PlannerOptions = {}): StudyPlan {
   const today = input.now?.slice(0, 10) ?? startOfToday();
   const activeExams = input.exams.filter((exam) => exam.date >= today).sort((a, b) => a.date.localeCompare(b.date));
   const rangeEnd = activeExams.at(-1)?.date ?? addDays(today, 7);
@@ -106,13 +120,43 @@ export function generateStudyPlan(input: PlannerInput): StudyPlan {
     for (const window of freeWindowsForDate(day.windows, date, input)) {
       let cursor = minutesFromTime(window.start);
       const end = minutesFromTime(window.end);
+      let consecutiveModelSlots = 0;
       while (cursor + 25 <= end && dailyLearning < maxDaily) {
-        const state = chooseExam(states, date, lastExamId, streak);
+        const slotKey = plannerSlotKey(date, cursor);
+        const hasModelDecision = options.allocation?.slots.has(slotKey) ?? false;
+        const modelExamId = hasModelDecision ? options.allocation?.slots.get(slotKey) : undefined;
+        if (hasModelDecision && modelExamId === null) {
+          cursor += 30;
+          consecutiveModelSlots = 0;
+          streak = 0;
+          lastExamId = null;
+          continue;
+        }
+        if (hasModelDecision && consecutiveModelSlots >= 2) {
+          cursor += 30;
+          consecutiveModelSlots = 0;
+          streak = 0;
+          lastExamId = null;
+          continue;
+        }
+        const recommended: ExamState | null = modelExamId
+          ? states.find(({ exam, planned, target, dailyTotals }) => exam.id === modelExamId
+            && exam.date >= date
+            && planned < target
+            && (dailyTotals.get(date) ?? 0) < maxDaily) ?? null
+          : null;
+        const state: ExamState | null = recommended ?? (hasModelDecision ? null : chooseExam(states, date, lastExamId, streak));
+        if (hasModelDecision && !state) {
+          cursor += 30;
+          continue;
+        }
         if (!state) break;
         const remainingWindow = end - cursor;
         const remainingTarget = state.target - state.planned;
         const method = resolvedLearningMethod(state.exam);
-        const desired = method === "pomodoro" ? 25 : remainingWindow < 45 ? Math.max(25, remainingWindow) : remainingWindow >= 65 ? 50 : 40;
+        const desired = hasModelDecision
+          ? method === "pomodoro" ? 25 : 30
+          : method === "pomodoro" ? 25 : remainingWindow < 45 ? Math.max(25, remainingWindow) : remainingWindow >= 65 ? 50 : 40;
         const duration = Math.min(desired, remainingTarget, maxDaily - dailyLearning);
         if (duration < 25) break;
         const topic = chooseTopic(state);
@@ -144,10 +188,11 @@ export function generateStudyPlan(input: PlannerInput): StudyPlan {
         state.topicCounts.set(topic.id, repeat + 1);
         state.lastTopicId = topic.id;
         dailyLearning += duration;
+        if (hasModelDecision) consecutiveModelSlots += 1;
         streak = lastExamId === state.exam.id ? streak + 1 : 1;
         lastExamId = state.exam.id;
         const plannedBreak = dailyLearning >= maxDaily ? 0 : streak % 3 === 0 ? 20 : 10;
-        cursor += duration + plannedBreak;
+        cursor += hasModelDecision ? 30 : duration + plannedBreak;
         if (remainingWindow * (1 - buffer) < 25) break;
       }
     }
@@ -161,5 +206,15 @@ export function generateStudyPlan(input: PlannerInput): StudyPlan {
     rangeStart: today,
     rangeEnd,
     sessions,
+    planner: options.allocation ? {
+      engine: "model-v007",
+      rewardVersion: "2.0",
+      inferenceMs: options.allocation.inferenceMs,
+      modelSha256: options.allocation.modelSha256,
+      local: true,
+    } : {
+      engine: "deterministic-v1",
+      local: true,
+    },
   };
 }

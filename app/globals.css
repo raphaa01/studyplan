@@ -655,6 +655,12 @@ input::placeholder { color: #b0b4ad; }
 .week-toolbar small, .week-toolbar strong { display: block; }
 .week-toolbar small { margin-bottom: 2px; color: var(--faint); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
 .week-toolbar strong { font-size: 11px; }
+.plan-toolbar-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.planner-engine-status { margin-bottom: 12px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: rgba(255,255,255,.72); display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 620; }
+.planner-engine-status.is-ready { color: var(--accent); border-color: #b7c4b5; background: var(--accent-soft); }
+.planner-engine-status.is-fallback { color: #766c50; background: #f6f2e8; }
+.is-spinning { animation: planner-spin .8s linear infinite; }
+@keyframes planner-spin { to { transform: rotate(360deg); } }
 .today-link { margin-left: 5px; padding: 7px 10px; border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 11px; font-weight: 650; }
 .week-timeline-shell { margin-bottom: 18px; border: 1px solid var(--line); border-radius: 10px; background: white; overflow-x: auto; box-shadow: 0 1px 2px rgba(30,35,28,.03); }
 .week-timeline-header { min-width: 1030px; height: 70px; display: grid; grid-template-columns: 60px repeat(7,minmax(138px,1fr)); border-bottom: 1px solid var(--line); }
@@ -769,6 +775,7 @@ input::placeholder { color: #b0b4ad; }
 }
 
 @media (max-width: 680px) {
+  .plan-toolbar-row { align-items: flex-start; flex-direction: column; gap: 0; }
   .page-heading .heading-actions { width: 100%; flex-wrap: wrap; }
   .page-heading .heading-actions .button { flex: 1; }
   .week-timeline-header, .week-timeline-scroll { min-width: 940px; }

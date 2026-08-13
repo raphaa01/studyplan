@@ -124,6 +124,14 @@ export interface StudyPlan {
   rangeStart: string;
   rangeEnd: string;
   sessions: StudySession[];
+  planner?: {
+    engine: "model-v007" | "deterministic-v1";
+    rewardVersion?: "2.0";
+    inferenceMs?: number;
+    modelSha256?: string;
+    local: boolean;
+    fallbackReason?: string;
+  };
 }
 
 export interface StudyData {
