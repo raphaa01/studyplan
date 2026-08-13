@@ -2,19 +2,22 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createDemoData } from "@/lib/demo-data";
-import { generateStudyPlan } from "@/lib/planner";
+import { generateAIStudyPlan, generateStudyPlan } from "@/lib/planner";
 import { LocalStorageRepository } from "@/lib/storage/local-storage-repository";
 import { SupabaseStudyRepository } from "@/lib/storage/supabase-study-repository";
 import { normalizeStudyData } from "@/lib/study-data";
 import { appendActivityRecord, createStudyActivity, createTodoActivity } from "@/lib/statistics";
-import type { AvailabilityDay, CalendarItem, Exam, LearningSessionProgress, StudyData, StudySessionFeedback, TodoFocusProgress, UserPreferences } from "@/types/study";
+import type { AvailabilityDay, CalendarItem, Exam, LearningSessionProgress, PlannerInput, StudyData, StudySessionFeedback, TodoFocusProgress, UserPreferences } from "@/types/study";
 import { useAccount } from "./account-provider";
 
 type SyncStatus = "idle" | "syncing" | "synced" | "error";
+type PlannerStatus = "idle" | "loading" | "ready" | "fallback";
 
 interface StudyContextValue extends StudyData {
   hydrated: boolean;
   syncStatus: SyncStatus;
+  plannerStatus: PlannerStatus;
+  plannerReason: string | null;
   saveExam: (exam: Exam) => void;
   removeExam: (id: string) => void;
   saveAvailability: (value: AvailabilityDay[]) => void;
@@ -42,7 +45,11 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<StudyData>(() => createDemoData());
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
+  const [plannerStatus, setPlannerStatus] = useState<PlannerStatus>("idle");
+  const [plannerReason, setPlannerReason] = useState<string | null>(null);
+  const [plannerRevision, setPlannerRevision] = useState(0);
   const saveQueue = useRef(Promise.resolve());
+  const plannerRequest = useRef(0);
   const hydrated = accountHydrated && loadedScope === scopeId;
 
   useEffect(() => {
@@ -109,10 +116,51 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
     }),
   }), []);
 
+  const plannerInput = useMemo<PlannerInput>(() => ({
+    availability: data.availability,
+    exams: data.exams,
+    previousSessions: data.plan.sessions.filter((session) => session.status === "completed" || session.status === "skipped"),
+    feedback: data.feedback,
+    preferences: data.preferences,
+    calendarItems: data.calendarItems,
+  }), [data.availability, data.calendarItems, data.exams, data.feedback, data.plan.sessions, data.preferences]);
+  const plannerInputKey = JSON.stringify(plannerInput);
+
+  useEffect(() => {
+    if (!hydrated || !account) return;
+    const request = ++plannerRequest.current;
+    queueMicrotask(() => {
+      if (plannerRequest.current !== request) return;
+      setPlannerStatus("loading");
+      setPlannerReason(null);
+      void generateAIStudyPlan(plannerInput).then((result) => {
+        if (plannerRequest.current !== request) return;
+        setPlannerStatus(result.status);
+        setPlannerReason(result.reason ?? null);
+        setData((current) => {
+          const next = { ...current, plan: result.plan };
+          localRepository.saveAll(next);
+          if (cloudRepository) {
+            setSyncStatus("syncing");
+            saveQueue.current = saveQueue.current
+              .then(() => cloudRepository.saveAll(next))
+              .then(() => setSyncStatus("synced"))
+              .catch(() => setSyncStatus("error"));
+          }
+          return next;
+        });
+      });
+    });
+  // plannerInputKey is the serialized, immutable snapshot used for this inference request.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, cloudRepository, hydrated, localRepository, plannerInputKey, plannerRevision]);
+
   const value = useMemo<StudyContextValue>(() => ({
     ...data,
     hydrated,
     syncStatus,
+    plannerStatus,
+    plannerReason,
     saveExam: (exam) => commit((current) => optimize({ ...current, exams: [...current.exams.filter((item) => item.id !== exam.id), exam] })),
     removeExam: (id) => commit((current) => optimize({ ...current, exams: current.exams.filter((exam) => exam.id !== id) })),
     saveAvailability: (availability) => commit((current) => optimize({ ...current, availability })),
@@ -163,9 +211,12 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
       return { ...current, activityLog, exams, learningProgress, feedback: [...current.feedback.filter((item) => item.sessionId !== sessionId), feedback], plan: { ...current.plan, sessions } };
     }),
     skipSession: (sessionId) => commit((current) => ({ ...current, plan: { ...current.plan, sessions: current.plan.sessions.map((session) => session.id === sessionId ? { ...session, status: "skipped" as const } : session) } })),
-    optimizePlan: () => commit(optimize),
+    optimizePlan: () => {
+      commit(optimize);
+      setPlannerRevision((value) => value + 1);
+    },
     resetDemo: () => commit(() => createDemoData()),
-  }), [commit, data, hydrated, optimize, syncStatus]);
+  }), [commit, data, hydrated, optimize, plannerReason, plannerStatus, syncStatus]);
 
   return <StudyContext.Provider value={value}>{hydrated ? children : <div className="app-loading"><span className="brand-mark">F</span><p>Dein Plan wird vorbereitet …</p></div>}</StudyContext.Provider>;
 }
