@@ -778,10 +778,20 @@ input::placeholder { color: #b0b4ad; }
   .plan-toolbar-row { align-items: flex-start; flex-direction: column; gap: 0; }
   .page-heading .heading-actions { width: 100%; flex-wrap: wrap; }
   .page-heading .heading-actions .button { flex: 1; }
-  .week-timeline-header, .week-timeline-scroll { min-width: 940px; }
-  .week-timeline-header { grid-template-columns: 52px repeat(7,minmax(126px,1fr)); }
-  .week-timeline-scroll { grid-template-columns: 52px minmax(0,1fr); }
-  .week-columns { grid-template-columns: repeat(7,minmax(126px,1fr)); }
+  .week-toolbar { width: 100%; display: grid; grid-template-columns: 34px minmax(0,1fr) 34px auto; gap: 4px; }
+  .week-toolbar > div { min-width: 0; }
+  .today-link { margin-left: 0; padding-inline: 8px; }
+  .week-timeline-shell { border: 0; border-radius: 0; overflow: visible; background: transparent; box-shadow: none; }
+  .week-timeline-header { width: 100%; min-width: 0; height: auto; padding: 4px; border: 0; border-radius: 9px; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 2px; background: #eceee9; }
+  .week-timeline-header > span:first-child { display: none; }
+  .week-timeline-header button { min-width: 0; min-height: 56px; padding: 7px 2px 6px; border: 0; border-radius: 7px; position: relative; background: transparent; }
+  .week-timeline-header button:hover { background: rgba(255,255,255,.55); }
+  .week-timeline-header button.active { background: white; box-shadow: 0 1px 4px rgba(38,48,36,.08); }
+  .week-timeline-header span { overflow: hidden; font-size: 8px; white-space: nowrap; }
+  .week-timeline-header strong { margin-top: 2px; font-size: 15px; }
+  .week-timeline-header button > i { position: absolute; right: 50%; bottom: 4px; width: 3px; height: 3px; border-radius: 50%; background: #9ba99a; transform: translateX(50%); }
+  .week-timeline-header button.active > i { background: var(--accent); }
+  .week-timeline-scroll { display: none; }
   .day-detail-panel { padding: 18px 14px; }
   .day-detail-head { align-items: start; flex-direction: column; gap: 7px; }
   .personal-agenda-item { grid-template-columns: 26px minmax(0,1fr); }
