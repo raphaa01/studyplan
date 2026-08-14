@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import psutil
 
-from .config import DATA_DIR, EVALUATION_FILE, MAX_TARGETS, REWARD_VERSION, REWARD_V3_WEIGHTS, SCHEMA_VERSION, VALIDATION_SEED, ensure_directories
+from .config import DATA_DIR, EVALUATION_FILE, MAX_TARGETS, REWARD_VERSION, REWARD_V3_WEIGHTS, RUNS_DIR, SCHEMA_VERSION, VALIDATION_SEED, ensure_directories
 from .evaluation import evaluate_baselines, evaluate_grouped, evaluate_model
 from .exporter import export_onnx
 from .generator import SituationGenerator, ensure_evaluation_set
@@ -17,6 +17,7 @@ from .registry import ModelRegistry
 from .model import PlannerActorCritic, generate_plan
 from .schemas import TrainingConfig, TrainingStatus
 from .trainer import train_ppo
+from .model import load_model
 
 
 class TrainingManager:
@@ -58,6 +59,35 @@ class TrainingManager:
                 learning_rate=config.learning_rate, model_size_bytes=current_size,
             )
             self._thread = threading.Thread(target=self._run, args=(config, run_id), daemon=True)
+            self._thread.start()
+            return self.status()
+
+    def recover_latest(self) -> TrainingStatus:
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                raise RuntimeError("training is already active")
+            candidates = sorted(RUNS_DIR.glob("run-*/checkpoint.pt"), key=lambda path: path.stat().st_mtime, reverse=True)
+            if not candidates:
+                raise RuntimeError("no recoverable checkpoint was found")
+            checkpoint = candidates[0]
+            _, payload = load_model(checkpoint)
+            saved_steps = int(payload.get("steps", 0))
+            raw_config = payload.get("config")
+            if not isinstance(raw_config, dict):
+                raise RuntimeError("checkpoint has no valid training configuration")
+            config = TrainingConfig.model_validate(raw_config)
+            if saved_steps >= config.total_steps:
+                raise RuntimeError("latest checkpoint has already reached its configured target")
+            run_id = checkpoint.parent.name
+            self._pause.clear()
+            self._stop.clear()
+            self._status = TrainingStatus(
+                state="running", run_id=run_id, started_at=datetime.now(timezone.utc),
+                message=f"Recovered checkpoint at step {saved_steps:,}", steps=saved_steps,
+                total_steps=config.total_steps, learning_rate=config.learning_rate,
+                model_size_bytes=checkpoint.stat().st_size,
+            )
+            self._thread = threading.Thread(target=self._run, args=(config, run_id, checkpoint), daemon=True)
             self._thread.start()
             return self.status()
 
@@ -113,7 +143,7 @@ class TrainingManager:
             self._status.history.append(point)
             self._status.history = self._status.history[-500:]
 
-    def _run(self, config: TrainingConfig, run_id: str) -> None:
+    def _run(self, config: TrainingConfig, run_id: str, resume_path: Path | None = None) -> None:
         try:
             parent_path = None
             load_parent_optimizer = True
@@ -123,8 +153,9 @@ class TrainingManager:
                 load_parent_optimizer = bool(parent and parent.get("reward_version") == REWARD_VERSION)
             result = train_ppo(
                 config=config, run_id=run_id, callback=self._metric,
-                pause_event=self._pause, stop_event=self._stop, parent_path=parent_path,
-                load_parent_optimizer=load_parent_optimizer,
+                pause_event=self._pause, stop_event=self._stop,
+                parent_path=parent_path if resume_path is None else None,
+                load_parent_optimizer=load_parent_optimizer, resume_path=resume_path,
             )
             with self._lock:
                 history_snapshot = list(self._status.history)

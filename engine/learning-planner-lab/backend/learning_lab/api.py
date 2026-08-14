@@ -67,6 +67,14 @@ def resume_training():
         raise HTTPException(409, str(exc)) from exc
 
 
+@app.post("/api/training/recover-latest")
+def recover_latest_training():
+    try:
+        return training.recover_latest()
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @app.post("/api/training/stop")
 def stop_training():
     try:
