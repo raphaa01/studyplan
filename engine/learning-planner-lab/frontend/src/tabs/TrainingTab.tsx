@@ -6,7 +6,7 @@ import type { ModelRecord, TrainingStatus } from '../types'
 const presets: Record<string, { steps: number; label: string }> = {
   quick: { steps: 5_000, label: 'Quick Test' }, short: { steps: 25_000, label: 'Short' },
   medium: { steps: 100_000, label: 'Medium' }, long: { steps: 500_000, label: 'Long' },
-  very_long: { steps: 2_000_000, label: 'Very Long' }, custom: { steps: 10_000, label: 'Custom' },
+  very_long: { steps: 5_000_000, label: 'Multi-million' }, custom: { steps: 10_000, label: 'Custom' },
 }
 
 interface Props {
@@ -35,6 +35,7 @@ export default function TrainingTab({ status, models, parentModel, setParentMode
   const [validationSize, setValidationSize] = useState(64)
   const [adaptiveLearningRate, setAdaptiveLearningRate] = useState(true)
   const [minLearningRate, setMinLearningRate] = useState(0.00001)
+  const [initMode, setInitMode] = useState<'scratch' | 'compatible_transfer'>('scratch')
   const [busy, setBusy] = useState(false)
   const active = ['running', 'paused', 'stopping'].includes(status.state)
   const progress = status.total_steps ? Math.min(status.steps / status.total_steps * 100, 100) : 0
@@ -63,7 +64,7 @@ export default function TrainingTab({ status, models, parentModel, setParentMode
         clip_range: 0.2, entropy_coef: entropy, value_coef: 0.5, epochs,
         max_grad_norm: 0.5, seed, curriculum, parent_model: parentModel || null,
         validation_size: validationSize, adaptive_learning_rate: adaptiveLearningRate,
-        min_learning_rate: minLearningRate,
+        min_learning_rate: minLearningRate, init_mode: parentModel ? initMode : 'scratch',
         checkpoint_interval: Math.max(1000, Math.min(10_000, Math.floor(steps / 5))),
       })
       notify(parentModel ? `Weitertraining auf Basis von ${parentModel} gestartet.` : 'Neues PPO-Training gestartet.')
@@ -79,8 +80,12 @@ export default function TrainingTab({ status, models, parentModel, setParentMode
     <section className="panel config-panel">
       <div className="section-head"><div><span className="eyebrow">Experiment setup</span><h2>Training konfigurieren</h2></div><span className={`state state-${status.state}`}>{status.state}</span></div>
       <label>Modellbasis<select value={parentModel} onChange={e => setParentModel(e.target.value)} disabled={active}>
-        <option value="">Neues Modell</option>{models.map(model => <option value={model.id} key={model.id}>Weitertrainieren: {model.name}</option>)}
+        <option value="">QECore v1.08 neu trainieren</option>{models.map(model => <option value={model.id} key={model.id}>{model.training_compatible ? 'Weitertrainieren' : 'Nur kontrollierter Transfer'}: {model.name}</option>)}
       </select></label>
+      {parentModel && <label>Initialisierung<select value={initMode} onChange={e => setInitMode(e.target.value as 'scratch' | 'compatible_transfer')} disabled={active}>
+        <option value="compatible_transfer">Nur kompatible Layer übernehmen</option>
+        <option value="scratch">Direkte Fortsetzung (nur Schema 3)</option>
+      </select></label>}
       <div className="field-label">Trainingsgröße</div>
       <div className="preset-grid">{Object.entries(presets).map(([key, value]) => <button key={key} className={preset === key ? 'selected' : ''} onClick={() => choosePreset(key)} disabled={active}>{value.label}<small>{value.steps.toLocaleString('de-DE')} steps</small></button>)}</div>
       <div className="form-grid">
@@ -102,7 +107,7 @@ export default function TrainingTab({ status, models, parentModel, setParentMode
         <label>Minimum Learning Rate<input type="number" value={minLearningRate} step="0.00001" onChange={e => setMinLearningRate(+e.target.value)} disabled={active} /></label>
         <label className="toggle-label"><span>Adaptive Learning Rate</span><button className={`toggle ${adaptiveLearningRate ? 'on' : ''}`} onClick={() => setAdaptiveLearningRate(!adaptiveLearningRate)} disabled={active}><i /></button></label>
       </div>}
-      {parentModel && models.find(model => model.id === parentModel)?.reward_version !== '2.0' && <p className="status-message">Reward-Upgrade: Die Modellgewichte werden übernommen, der alte Optimizer-Zustand wird bewusst zurückgesetzt.</p>}
+      {parentModel && !models.find(model => model.id === parentModel)?.training_compatible && <p className="status-message">Schema-Wechsel: QECore v1.07 kann nicht direkt fortgesetzt werden. Nur formgleiche Layer werden kontrolliert übernommen; Eingabe- und Context-Layer starten neu.</p>}
       <div className="train-actions">
         {!active && <button className="primary" onClick={start} disabled={busy}>{busy ? 'Startet…' : 'Start Training'}</button>}
         {status.state === 'running' && <button onClick={() => command('pause')}>Pause</button>}
@@ -143,7 +148,7 @@ export default function TrainingTab({ status, models, parentModel, setParentMode
           { label: 'Value', color: '#c39cff', values: status.history.map(p => p.value_loss) },
         ]} />
       </section>
-      <section className="panel chart-panel"><div className="section-head"><div><span className="eyebrow">Fixed validation subset · Reward v2.0</span><h2>Evaluation Performance</h2></div></div>
+      <section className="panel chart-panel"><div className="section-head"><div><span className="eyebrow">Fixed validation subset · Reward v3.0</span><h2>Evaluation Performance</h2></div></div>
         <LineChart series={[{ label: 'Evaluation reward', color: '#53d4dd', values: status.history.map(p => p.evaluation_reward).filter((value): value is number => value != null) }]} />
       </section>
       <section className="panel resources-panel"><div className="section-head"><div><span className="eyebrow">Local resources</span><h2>Systemauslastung</h2></div></div>

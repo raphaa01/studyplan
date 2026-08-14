@@ -9,12 +9,12 @@ from uuid import uuid4
 
 import psutil
 
-from .config import DATA_DIR, EVALUATION_FILE, REWARD_VERSION, REWARD_WEIGHTS, VALIDATION_SEED, ensure_directories
-from .evaluation import evaluate_baselines, evaluate_model
+from .config import DATA_DIR, EVALUATION_FILE, MAX_TARGETS, REWARD_VERSION, REWARD_V3_WEIGHTS, SCHEMA_VERSION, VALIDATION_SEED, ensure_directories
+from .evaluation import evaluate_baselines, evaluate_grouped, evaluate_model
 from .exporter import export_onnx
 from .generator import SituationGenerator, ensure_evaluation_set
 from .registry import ModelRegistry
-from .model import PlannerActorCritic
+from .model import PlannerActorCritic, generate_plan
 from .schemas import TrainingConfig, TrainingStatus
 from .trainer import train_ppo
 
@@ -44,6 +44,9 @@ class TrainingManager:
                 raise RuntimeError("training is already active")
             if config.parent_model and not self.registry.get(config.parent_model):
                 raise KeyError(config.parent_model)
+            parent_item = self.registry.get(config.parent_model) if config.parent_model else None
+            if parent_item and not parent_item.get("training_compatible") and config.init_mode != "compatible_transfer":
+                raise ValueError("Incompatible parent: choose controlled compatible_transfer; silent v2 continuation is blocked")
             run_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:6]}"
             self._pause.clear()
             self._stop.clear()
@@ -149,7 +152,32 @@ class TrainingManager:
             fresh_generator = SituationGenerator(config.seed + 9_999_991)
             fresh = [fresh_generator.generate(5, seed=config.seed + 2_000_000 + i) for i in range(250)]
             fresh_result = evaluate_model(result.model, fresh)
+            grouped = evaluate_grouped(result.model, fresh_generator, samples_per_group=16, seed=config.seed + 3_000_000)
             baselines = self._baseline_results(fixed)
+            groups = grouped["groups"]
+            exam_metrics = groups["exam_only"]["metrics"]
+            routine_metrics = groups["routine_only"]["metrics"]
+            credit_metrics = groups["same_subject_credit"]["metrics"]
+            exam_regression = None
+            legacy_item = self.registry.get("model-v007")
+            if legacy_item:
+                legacy_model, _ = self.registry.load("model-v007")
+                exam_scenarios = [fresh_generator.generate_group("exam_only", config.seed + 4_000_000 + i) for i in range(32)]
+                candidate_exam = evaluate_model(result.model, exam_scenarios)
+                legacy_exam = evaluate_model(legacy_model, exam_scenarios)
+                exam_regression = {
+                    "candidate": candidate_exam, "qecore_v1_07": legacy_exam,
+                    "relative": (float(candidate_exam["mean_reward"]) - float(legacy_exam["mean_reward"])) / max(abs(float(legacy_exam["mean_reward"])), 1),
+                }
+            gates = {
+                "no_invalid_or_deadline_actions": all(item.reward.invalid == 0 for item in [generate_plan(result.model, scenario) for scenario in fresh[:32]]),
+                "routine_fulfillment": routine_metrics["routine_fulfillment"] >= 65,
+                "same_subject_no_double_count": credit_metrics["double_counts"] == 0,
+                "browser_size_under_1mb": result.model.estimated_size_bytes() < 1_000_000,
+                "exam_readiness_floor": exam_metrics["exam_readiness"] >= 55,
+                "exam_only_not_materially_worse_than_v007": exam_regression is None or exam_regression["relative"] >= -.05,
+                "fatigue_within_limit": groups["fatigue_breaks"]["metrics"]["fatigue"] <= 5,
+            }
             metadata = {
                 "parent_model": config.parent_model,
                 "training_steps": result.steps,
@@ -164,14 +192,19 @@ class TrainingManager:
                 "fresh_test_score": fresh_result["mean_reward"],
                 "evaluation": fixed_result,
                 "fresh_evaluation": fresh_result,
+                "grouped_evaluation": grouped,
+                "acceptance_gates": gates,
+                "website_candidate": False,
+                "exam_only_regression": exam_regression,
                 "baselines": baselines,
                 "hyperparameters": config.model_dump(mode="json"),
                 "environment": {
-                    "slot_minutes": 30, "max_exams": 8, "curriculum": config.curriculum,
+                    "slot_minutes": 30, "max_targets": MAX_TARGETS, "curriculum": config.curriculum,
                     "validation_seed": VALIDATION_SEED,
                 },
                 "reward_version": REWARD_VERSION,
-                "reward_weights": REWARD_WEIGHTS.to_dict(),
+                "schema_version": SCHEMA_VERSION,
+                "reward_weights": REWARD_V3_WEIGHTS.to_dict(),
                 "parent_optimizer_restored": load_parent_optimizer,
                 "software_version": "0.2.0",
             }
@@ -180,6 +213,12 @@ class TrainingManager:
             try:
                 onnx_result = export_onnx(result.model, model_dir / "model.onnx")
                 item["onnx"] = onnx_result
+                item["acceptance_gates"].update({
+                    "onnx_parity": onnx_result["max_logits_error"] <= 1e-4 and onnx_result["max_value_error"] <= 1e-4,
+                    "onnx_under_1mb": onnx_result["size_bytes"] < 1_000_000,
+                    "reproducible_sha256": len(str(onnx_result["sha256"])) == 64,
+                })
+                item["website_candidate"] = all(item["acceptance_gates"].values())
                 items = self.registry.list()
                 for registry_item in items:
                     if registry_item["id"] == item["id"]:
@@ -205,11 +244,12 @@ class TrainingManager:
                 cached.get("evaluation_file") == str(EVALUATION_FILE)
                 and cached.get("sample_count") == len(situations)
                 and cached.get("reward_version") == REWARD_VERSION
+                and cached.get("schema_version") == SCHEMA_VERSION
             ):
                 return cached["results"]
         results = evaluate_baselines(situations)
         cache_path.write_text(json.dumps({
             "evaluation_file": str(EVALUATION_FILE), "sample_count": len(situations),
-            "reward_version": REWARD_VERSION, "results": results,
+            "reward_version": REWARD_VERSION, "schema_version": SCHEMA_VERSION, "results": results,
         }, indent=2), encoding="utf-8")
         return results

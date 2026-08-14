@@ -62,6 +62,11 @@ export interface ModelRecord {
   onnx?: { size_bytes: number; loadable: boolean; max_logits_error: number }
   onnx_error?: string
   reward_version?: string
+  schema_version?: string
+  training_compatible?: boolean
+  website_candidate?: boolean
+  acceptance_gates?: Record<string, boolean>
+  grouped_evaluation?: { groups: Record<string, { mean_reward: number; metrics: Record<string, number> }> }
   best_validation_reward?: number
   best_step?: number
   selected_best_checkpoint?: boolean
@@ -76,6 +81,24 @@ export interface ExamInput {
   importance: number
   invested_minutes: number
   estimated_need_minutes?: number
+  learning_method?: LearningMethod
+}
+
+export type LearningMethod = 'auto' | 'pomodoro' | 'spaced_repetition' | 'interleaving' | 'active_recall' | 'exam_simulation'
+
+export interface RoutineInput {
+  id: string
+  subject: string
+  subject_id?: string
+  title: string
+  sessions_per_week: number
+  preferred_session_minutes: number
+  importance: number
+  difficulty: number
+  learning_method: LearningMethod
+  preferred_weekdays: number[]
+  flexible: boolean
+  enabled: boolean
 }
 
 export interface TimeWindow { day: number; start_minute: number; end_minute: number }
@@ -85,6 +108,9 @@ export interface Session {
   start_minute: number
   end_minute: number
   exam_id: string | null
+  routine_id?: string | null
+  routine_credit_ids?: string[]
+  learning_method?: LearningMethod
   subject: string
   kind: 'study' | 'break'
 }

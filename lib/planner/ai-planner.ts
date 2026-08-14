@@ -3,6 +3,7 @@ import { addDays, daysBetween, minutesFromTime, startOfToday } from "./date-util
 import { freeWindowsForDate, generateStudyPlan, plannerSlotKey } from "./planner";
 import { averageUncertainty, estimateExamMinutes } from "./priority";
 import { loadModelV007, PLANNER_MODEL_V007, runModelV007, type ModelV007Observation } from "./model-v007";
+import { QECORE_V108, type QECoreObservation, validateQECoreObservation } from "./model-v108";
 
 interface ModelExam {
   exam: Exam;
@@ -167,5 +168,33 @@ export async function generateAIStudyPlan(input: PlannerInput): Promise<AIPlanne
     };
   } catch (error) {
     return fallback(input, error instanceof Error ? error.message : "Das lokale Planungsmodell ist nicht verfügbar.");
+  }
+}
+
+export type QECoreRuntime = (observation: QECoreObservation) => Promise<{ logits: Float32Array; value: number }>;
+
+export type QECoreActionResult = {
+  action: number | null;
+  fallback: boolean;
+  reason?: string;
+};
+
+/** Guarded v1.08 allocation boundary; model-v007 stays active until a v1.08 candidate passes every gate. */
+export async function selectQECoreAction(observation: QECoreObservation, runtime: QECoreRuntime): Promise<QECoreActionResult> {
+  if (!validateQECoreObservation(observation)) return { action: null, fallback: true, reason: "invalid-observation" };
+  try {
+    const output = await runtime(observation);
+    if (output.logits.length !== QECORE_V108.maxTargets + 1 || !Number.isFinite(output.value)
+      || ![...output.logits].every(Number.isFinite)) {
+      return { action: null, fallback: true, reason: "invalid-model-output" };
+    }
+    let best = 0;
+    for (let action = 1; action < output.logits.length; action += 1) {
+      if (observation.actionMask[action] && output.logits[action] > output.logits[best]) best = action;
+    }
+    if (!observation.actionMask[best]) return { action: null, fallback: true, reason: "masked-action" };
+    return { action: best, fallback: false };
+  } catch {
+    return { action: null, fallback: true, reason: "runtime-error" };
   }
 }

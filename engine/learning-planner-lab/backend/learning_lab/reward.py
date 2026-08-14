@@ -5,8 +5,9 @@ from math import ceil, exp, sqrt
 
 import numpy as np
 
-from .config import REWARD_VERSION, REWARD_WEIGHTS, RewardWeights, SLOT_MINUTES
+from .config import LEGACY_REWARD_VERSION, REWARD_V3_WEIGHTS, REWARD_WEIGHTS, RewardV3Weights, RewardWeights, SLOT_MINUTES
 from .schemas import Exam, RewardBreakdown, Situation
+from .targets import exam_credit_routines, method_profile, targets_for
 
 
 def _clip01(value: float) -> float:
@@ -146,7 +147,7 @@ def _switching_penalty(situation: Situation, assignments: list[int]) -> float:
     return bad_switches / max(switches, 1)
 
 
-def score_plan(
+def score_plan_v2(
     situation: Situation,
     assignments: list[int],
     weights: RewardWeights = REWARD_WEIGHTS,
@@ -257,7 +258,7 @@ def score_plan(
     }
     total = float(sum(components.values()))
     return RewardBreakdown(
-        reward_version=REWARD_VERSION,
+        reward_version=LEGACY_REWARD_VERSION,
         total=total,
         per_exam=per_exam,
         **components,
@@ -266,7 +267,7 @@ def score_plan(
 
 def _invalid_breakdown(invalid: float) -> RewardBreakdown:
     return RewardBreakdown(
-        reward_version=REWARD_VERSION,
+        reward_version=LEGACY_REWARD_VERSION,
         total=invalid,
         preparation=0,
         deadline=0,
@@ -281,4 +282,135 @@ def _invalid_breakdown(invalid: float) -> RewardBreakdown:
         break_quality=0,
         cramming=0,
         invalid=invalid,
+    )
+
+
+def score_plan(
+    situation: Situation,
+    assignments: list[int],
+    weights: RewardWeights | RewardV3Weights | None = None,
+) -> RewardBreakdown:
+    """Dispatch legacy exam-only fixtures to Reward v2 and schema-v3 plans to Reward v3."""
+    if situation.schema_version != "3.0" and not situation.routines:
+        return score_plan_v2(situation, assignments, weights if isinstance(weights, RewardWeights) else REWARD_WEIGHTS)
+    return score_plan_v3(situation, assignments, weights if isinstance(weights, RewardV3Weights) else REWARD_V3_WEIGHTS)
+
+
+def score_plan_v3(
+    situation: Situation,
+    assignments: list[int],
+    weights: RewardV3Weights = REWARD_V3_WEIGHTS,
+) -> RewardBreakdown:
+    targets = targets_for(situation)
+    if len(assignments) != len(situation.slots):
+        return RewardBreakdown(total=weights.invalid, invalid=weights.invalid)
+    invalid_count = sum(action < 0 or action > len(targets) for action in assignments)
+    target_index = {target.id: index + 1 for index, target in enumerate(targets)}
+
+    # Reuse the mature v2 readiness terms for exams; routines never consume exam minutes here.
+    exam_assignments: list[int] = []
+    for action in assignments:
+        if 0 < action <= len(targets) and targets[action - 1].kind == "exam":
+            exam_assignments.append(next(i + 1 for i, exam in enumerate(situation.exams) if exam.id == targets[action - 1].id))
+        else:
+            exam_assignments.append(0)
+    legacy = situation.model_copy(update={"routines": [], "schema_version": "2.0"})
+    exam_score = score_plan_v2(legacy, exam_assignments) if situation.exams else RewardBreakdown(reward_version="2.0", total=0)
+
+    # Convert v2's weighted components to v3 weights without changing their bounded metrics.
+    def rescale(value: float, old_weight: float, new_weight: float) -> float:
+        return 0.0 if old_weight == 0 else value / old_weight * new_weight
+
+    components = {
+        "preparation": rescale(exam_score.preparation, REWARD_WEIGHTS.preparation, weights.preparation),
+        "deadline": rescale(exam_score.deadline, REWARD_WEIGHTS.deadline, weights.deadline),
+        "spacing": rescale(exam_score.spacing, REWARD_WEIGHTS.spacing, weights.spacing),
+        "early_start": rescale(exam_score.early_start, REWARD_WEIGHTS.early_start, weights.early_start),
+        "coverage": rescale(exam_score.coverage, REWARD_WEIGHTS.coverage, weights.coverage),
+        "fairness": rescale(exam_score.fairness, REWARD_WEIGHTS.fairness, weights.fairness),
+        "utilization": rescale(exam_score.utilization, REWARD_WEIGHTS.utilization, weights.utilization),
+        "overlearning": rescale(exam_score.overlearning, REWARD_WEIGHTS.overlearning, weights.overlearning),
+        "fatigue": rescale(exam_score.fatigue, REWARD_WEIGHTS.fatigue, weights.fatigue),
+        "switching": rescale(exam_score.switching, REWARD_WEIGHTS.switching, weights.switching),
+        "break_quality": rescale(exam_score.break_quality, REWARD_WEIGHTS.break_quality, weights.break_quality),
+        "cramming": rescale(exam_score.cramming, REWARD_WEIGHTS.cramming, weights.cramming),
+        "invalid": weights.invalid * invalid_count,
+    }
+
+    fulfillments: list[float] = []
+    distributions: list[float] = []
+    overfills: list[float] = []
+    substitution_count = 0
+    duplicate_count = 0
+    method_scores: list[float] = []
+    per_routine: dict[str, float] = {}
+
+    for routine in situation.routines:
+        if not routine.enabled:
+            continue
+        own_action = target_index.get(routine.id, -1)
+        own_indices = [i for i, action in enumerate(assignments) if action == own_action]
+        credit_indices: list[int] = []
+        for exam in situation.exams:
+            if routine in exam_credit_routines(situation, exam):
+                exam_action = target_index.get(exam.id, -1)
+                credit_indices.extend(i for i, action in enumerate(assignments) if action == exam_action)
+        # One distinct day contributes at most one weekly session. Exam credit is consumed first.
+        credit_days = {situation.slots[i].day for i in credit_indices}
+        own_days = {situation.slots[i].day for i in own_indices}
+        active_weeks = len({slot.day // 7 for slot in situation.slots}) or 1
+        weekly_target = routine.sessions_per_week * active_weeks
+        substitution = min(len(credit_days), weekly_target)
+        fulfilled = min(weekly_target, len(credit_days | own_days))
+        substitution_count += substitution
+        extra_own = max(0, len(own_days) - max(0, weekly_target - substitution))
+        duplicate_count += extra_own if substitution >= weekly_target else 0
+        overfill = max(0, len(credit_days | own_days) - weekly_target)
+        fulfillment = fulfilled / weekly_target
+        days = sorted(credit_days | own_days)
+        distribution = 1.0 if len(days) <= 1 else min(1.0, float(np.mean(np.diff(days))) / 2.0)
+        fulfillments.append(fulfillment)
+        distributions.append(distribution * fulfillment)
+        overfills.append(overfill / weekly_target)
+        per_routine[routine.id] = round(100 * fulfillment, 3)
+
+    # Method timing applies to all selected targets; concrete content remains deterministic.
+    for target_idx, target in enumerate(targets, start=1):
+        indices = [i for i, action in enumerate(assignments) if action == target_idx]
+        if not indices:
+            continue
+        profile = method_profile(target.learning_method, kind=target.kind, days_until=target.deadline_day, difficulty=target.difficulty)
+        days = [situation.slots[i].day for i in indices]
+        distinct = len(set(days)) / max(len(indices), 1)
+        block_pairs = sum(
+            situation.slots[b].day == situation.slots[a].day
+            and situation.slots[a].end_minute == situation.slots[b].start_minute
+            for a, b in zip(indices, indices[1:])
+        ) / max(len(indices) - 1, 1)
+        phase = float(np.mean([situation.slots[i].day / max(target.deadline_day or 7, 1) for i in indices]))
+        spacing_fit = 1 - abs(distinct - profile.spacing_preference)
+        block_target = min(profile.desired_block_slots - 1, 1)
+        block_fit = 1 - abs(block_pairs - block_target)
+        phase_fit = 1 - min(abs(phase - profile.preferred_phase), 1)
+        method_scores.append(_clip01(.45 * spacing_fit + .35 * block_fit + .20 * phase_fit))
+
+    stability_total = len(situation.locked_sessions)
+    stability_kept = 0
+    for locked in situation.locked_sessions:
+        expected = target_index.get(locked.target_id or "", 0)
+        if 0 <= locked.slot_index < len(assignments) and assignments[locked.slot_index] == expected:
+            stability_kept += 1
+
+    components.update({
+        "routine_fulfillment": weights.routine_fulfillment * (float(np.mean(fulfillments)) if fulfillments else 0.0),
+        "routine_overfill": weights.routine_overfill * (float(np.mean(overfills)) if overfills else 0.0),
+        "routine_distribution": weights.routine_distribution * (float(np.mean(distributions)) if distributions else 0.0),
+        "exam_substitution_credit": weights.exam_substitution_credit * min(substitution_count / max(sum(r.sessions_per_week for r in situation.routines), 1), 1),
+        "duplicate_work": weights.duplicate_work * duplicate_count,
+        "method_adherence": weights.method_adherence * (float(np.mean(method_scores)) if method_scores else 0.0),
+        "plan_stability": weights.plan_stability * (stability_kept / stability_total if stability_total else 0.0),
+    })
+    return RewardBreakdown(
+        reward_version="3.0", total=float(sum(components.values())), per_exam=exam_score.per_exam,
+        per_routine=per_routine, **components,
     )

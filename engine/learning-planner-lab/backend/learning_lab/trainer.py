@@ -21,7 +21,7 @@ from .config import RUNS_DIR, VALIDATION_SEED
 from .environment import LearningPlanEnv, Observation, curriculum_level
 from .generator import SituationGenerator
 from .evaluation import evaluate_model
-from .model import PlannerActorCritic, load_model, observation_tensors, save_model
+from .model import LegacyPlannerActorCritic, PlannerActorCritic, load_model, observation_tensors, save_model, transfer_compatible_layers
 from .schemas import TrainingConfig
 
 
@@ -57,7 +57,19 @@ def train_ppo(
     torch.manual_seed(config.seed)
     torch.set_num_threads(max(1, min(os.cpu_count() or 1, max(config.parallel_envs, 2))))
     device = torch.device("cpu")
-    model = load_model(parent_path, device)[0] if parent_path else PlannerActorCritic()
+    transferred_layers: list[str] = []
+    if parent_path:
+        parent_model = load_model(parent_path, device)[0]
+        if isinstance(parent_model, LegacyPlannerActorCritic):
+            if config.init_mode != "compatible_transfer":
+                raise ValueError("QECore v1.07 has incompatible v2 inputs; choose compatible_transfer or train from scratch")
+            model = PlannerActorCritic()
+            transferred_layers = transfer_compatible_layers(parent_model, model)
+            load_parent_optimizer = False
+        else:
+            model = parent_model
+    else:
+        model = PlannerActorCritic()
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     if parent_path and load_parent_optimizer:
@@ -72,6 +84,7 @@ def train_ppo(
     run_directory = RUNS_DIR / run_id
     run_directory.mkdir(parents=True, exist_ok=True)
     (run_directory / "config.json").write_text(config.model_dump_json(indent=2), encoding="utf-8")
+    (run_directory / "transfer.json").write_text(json.dumps({"source": str(parent_path) if parent_path else None, "layers": transferred_layers}), encoding="utf-8")
 
     env_count = config.parallel_envs
     generators = [SituationGenerator(config.seed + 1009 * i) for i in range(env_count)]

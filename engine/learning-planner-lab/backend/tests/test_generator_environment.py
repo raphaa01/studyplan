@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from learning_lab.config import MAX_EXAMS
+from learning_lab.config import MAX_EXAMS, MAX_TARGETS
 from learning_lab.environment import LearningPlanEnv
 from learning_lab.generator import SituationGenerator
+from learning_lab.targets import targets_for
 
 
 def test_generator_creates_valid_diverse_situations() -> None:
@@ -24,9 +25,9 @@ def test_action_mask_prevents_missing_and_expired_exams() -> None:
     situation = SituationGenerator(8).generate(level=5, seed=99)
     env = LearningPlanEnv()
     observation = env.reset(situation)
-    assert observation.action_mask.shape == (MAX_EXAMS + 1,)
+    assert observation.action_mask.shape == (MAX_TARGETS + 1,)
     assert observation.action_mask[0]
-    assert not observation.action_mask[len(situation.exams) + 1 :].any()
+    assert not observation.action_mask[len(targets_for(situation)) + 1 :].any()
     while True:
         mask = env.action_mask()
         action = int(np.flatnonzero(mask)[-1])
@@ -39,7 +40,7 @@ def test_action_mask_prevents_missing_and_expired_exams() -> None:
 def test_invalid_action_is_safe_and_penalized() -> None:
     env = LearningPlanEnv()
     env.reset(seed=22)
-    _, reward, _, info = env.step(MAX_EXAMS + 3)
+    _, reward, _, info = env.step(MAX_TARGETS + 3)
     assert info["invalid_action"]
     assert reward < 0
 

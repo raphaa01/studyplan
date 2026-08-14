@@ -3,10 +3,11 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from learning_lab.config import MAX_EXAMS
+from learning_lab.config import MAX_TARGETS
 from learning_lab.environment import LearningPlanEnv
 from learning_lab.generator import SituationGenerator
 from learning_lab.model import PlannerActorCritic, generate_plan, load_model, observation_tensors, save_model
+from learning_lab.targets import targets_for
 
 
 def test_model_handles_valid_situation_and_stays_tiny(tmp_path) -> None:
@@ -33,8 +34,8 @@ def test_policy_is_permutation_equivariant() -> None:
     exams, globals_, mask = observation_tensors([observation])
     logits, value = model(exams, globals_, mask)
 
-    count = len(situation.exams)
-    permutation = np.arange(MAX_EXAMS)
+    count = len(targets_for(situation))
+    permutation = np.arange(MAX_TARGETS)
     permutation[:count] = permutation[:count][::-1]
     perm_exams = exams[:, permutation]
     perm_mask = torch.cat([mask[:, :1], mask[:, 1:][:, permutation]], dim=1)
