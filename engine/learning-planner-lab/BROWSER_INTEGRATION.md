@@ -1,4 +1,19 @@
-# QECore v1.08 browser integration contract
+# QECore browser integration contract
+
+## Production model: QECore v1.09
+
+`models/model-v009` is published in the website as
+`public/models/qecore-v109.weights`. The browser verifies the 104,332-byte
+artifact with SHA-256 before inference and runs the same SharedTargetMLP-64
+layers without a heavyweight ONNX runtime. `lib/planner/model-v109.ts` is the
+canonical production contract.
+
+The candidate did not pass its routine-fulfillment and exam-only comparison
+gates. It is therefore used as a guarded allocation preference: hard masks,
+calendar conflicts, breaks, content generation and unfilled idle slots remain
+under the deterministic planner's control.
+
+## QECore v1.08 candidate contract
 
 QECore v1.08 uses schema 3.0 and Reward 3.0. It allocates 30-minute planning
 slots to at most 12 planning targets. Action `0` is idle; action `n` selects

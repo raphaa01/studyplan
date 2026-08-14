@@ -150,8 +150,8 @@ export interface StudyPlan {
   rangeEnd: string;
   sessions: StudySession[];
   planner?: {
-    engine: "model-v007" | "deterministic-v1";
-    rewardVersion?: "2.0";
+    engine: "model-v007" | "qecore-v1.09" | "deterministic-v1";
+    rewardVersion?: "2.0" | "3.0";
     inferenceMs?: number;
     modelSha256?: string;
     local: boolean;
