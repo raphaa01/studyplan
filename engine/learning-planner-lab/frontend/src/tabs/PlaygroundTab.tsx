@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { api } from '../api'
 import { Empty, formatTime } from '../components'
-import type { Challenge, ExamInput, ModelRecord, Plan, PlaygroundResult, TimeWindow } from '../types'
+import type { Challenge, ExamInput, ModelRecord, Plan, PlaygroundResult, RoutineInput, TimeWindow } from '../types'
 
 const days = Array.from({ length: 7 }, (_, offset) => {
   const value = new Date()
@@ -12,11 +12,13 @@ const colors = ['#75e6b5', '#77a5ff', '#f0b86e', '#c39cff', '#ff7d8d', '#53d4dd'
 
 function dateAfter(days: number) { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10) }
 function newExam(index: number): ExamInput { return { id: `exam-${Date.now()}-${index}`, subject: ['Mathematik','Deutsch','Geschichte'][index % 3], kind: index === 0 ? 'exam' : 'test', date: dateAfter(3 + index * 4), difficulty: 7, importance: 8, invested_minutes: 0, estimated_need_minutes: 240 } }
+function newRoutine(index: number): RoutineInput { const subject = ['Mathematik','Englisch','Biologie'][index % 3]; return { id: `routine-${Date.now()}-${index}`, subject, subject_id: subject.toLocaleLowerCase('de-DE'), title: `${subject} regelmäßig`, sessions_per_week: 2, preferred_session_minutes: 30, importance: 5, difficulty: 5, learning_method: 'spaced_repetition', preferred_weekdays: [], flexible: true, enabled: true } }
 
 interface Props { models: ModelRecord[]; selectedModel: string; setSelectedModel: (id: string) => void; challenges: Challenge[]; notify: (m: string, e?: boolean) => void }
 
 export default function PlaygroundTab({ models, selectedModel, setSelectedModel, challenges, notify }: Props) {
   const [exams, setExams] = useState<ExamInput[]>([newExam(0), newExam(1)])
+  const [routines, setRoutines] = useState<RoutineInput[]>([newRoutine(0)])
   const [windows, setWindows] = useState<TimeWindow[]>([
     { day: 0, start_minute: 15 * 60, end_minute: 17 * 60 }, { day: 1, start_minute: 16 * 60 + 30, end_minute: 18 * 60 },
     { day: 2, start_minute: 15 * 60 + 30, end_minute: 18 * 60 }, { day: 5, start_minute: 10 * 60, end_minute: 13 * 60 },
@@ -27,13 +29,14 @@ export default function PlaygroundTab({ models, selectedModel, setSelectedModel,
   const colorByExam = useMemo(() => Object.fromEntries(exams.map((exam, index) => [exam.id, colors[index % colors.length]])), [exams])
 
   function patchExam(id: string, patch: Partial<ExamInput>) { setExams(values => values.map(exam => exam.id === id ? { ...exam, ...patch } : exam)) }
+  function patchRoutine(id: string, patch: Partial<RoutineInput>) { setRoutines(values => values.map(routine => routine.id === id ? { ...routine, ...patch } : routine)) }
   function addWindow(day: number) { setWindows(values => [...values, { day, start_minute: day >= 5 ? 10 * 60 : 16 * 60, end_minute: day >= 5 ? 12 * 60 : 18 * 60 }]) }
   function timeToMinutes(value: string) { const [h, m] = value.split(':').map(Number); return h * 60 + m }
 
   async function generate() {
     setBusy(true)
     try {
-      const payload = await api.plan({ exams, windows, model_id: selectedModel || null, compare_baselines: true, seed: 42 })
+      const payload = await api.plan({ exams, routines, windows, model_id: selectedModel || null, compare_baselines: true, seed: 42 })
       setResult(payload); notify(selectedModel ? 'Plan durch das gespeicherte Modell erzeugt.' : 'Baseline-Pläne erzeugt; trainiere oder wähle ein Modell für AI-Inference.')
     } catch (error) { notify((error as Error).message, true) } finally { setBusy(false) }
   }
@@ -58,9 +61,17 @@ export default function PlaygroundTab({ models, selectedModel, setSelectedModel,
           <label>Geschätzter Bedarf (min)<input type="number" min="30" step="30" value={exam.estimated_need_minutes} onChange={e => patchExam(exam.id, { estimated_need_minutes: +e.target.value })} /></label>
         </div>)}</div>
       </section>
+      <section className="panel"><div className="section-head"><div><span className="eyebrow">Flexible weekly goals</span><h2>Lernroutinen</h2></div><button onClick={() => exams.length + routines.length < 12 && setRoutines(v => [...v, newRoutine(v.length)])}>+ Hinzufügen</button></div>
+        <div className="exam-list">{routines.map(routine => <div className="exam-card" key={routine.id}>
+          <div className="exam-card-head"><input value={routine.subject} onChange={e => patchRoutine(routine.id, { subject: e.target.value, subject_id: e.target.value.toLocaleLowerCase('de-DE') })} aria-label="Routine-Fach" /><button onClick={() => setRoutines(v => v.filter(item => item.id !== routine.id))}>×</button></div>
+          <label>Titel<input value={routine.title} onChange={e => patchRoutine(routine.id, { title: e.target.value })} /></label>
+          <div className="compact-form"><label>Pro Woche<input type="number" min="1" max="7" value={routine.sessions_per_week} onChange={e => patchRoutine(routine.id, { sessions_per_week: +e.target.value })} /></label><label>Minuten<input type="number" min="25" max="180" step="5" value={routine.preferred_session_minutes} onChange={e => patchRoutine(routine.id, { preferred_session_minutes: +e.target.value })} /></label></div>
+          <label>Lernmethode<select value={routine.learning_method} onChange={e => patchRoutine(routine.id, { learning_method: e.target.value as RoutineInput['learning_method'] })}><option value="spaced_repetition">Spaced Repetition</option><option value="interleaving">Interleaving</option><option value="active_recall">Active Recall</option><option value="pomodoro">Pomodoro</option><option value="exam_simulation">Prüfungssimulation</option><option value="auto">Automatisch</option></select></label>
+        </div>)}</div>
+      </section>
       <section className="panel"><div className="section-head"><div><span className="eyebrow">Weekly availability</span><h2>Lernzeiten</h2></div></div>
         <div className="week-editor">{days.map((day, dayIndex) => <div className="day-editor" key={day}><div><strong>{day}</strong><button onClick={() => addWindow(dayIndex)}>+</button></div>{windows.filter(window => window.day === dayIndex).map((window, index) => <div className="time-window" key={`${dayIndex}-${index}`}><input type="time" step="1800" value={formatTime(window.start_minute)} onChange={e => setWindows(values => values.map(value => value === window ? { ...value, start_minute: timeToMinutes(e.target.value) } : value))} /><span>–</span><input type="time" step="1800" value={formatTime(window.end_minute)} onChange={e => setWindows(values => values.map(value => value === window ? { ...value, end_minute: timeToMinutes(e.target.value) } : value))} /><button onClick={() => setWindows(values => values.filter(value => value !== window))}>×</button></div>)}</div>)}</div>
-        <button className="primary generate" onClick={generate} disabled={busy || !exams.length || !windows.length}>{busy ? 'Berechnet…' : 'Generate Learning Plan'}</button>
+        <button className="primary generate" onClick={generate} disabled={busy || (!exams.length && !routines.length) || !windows.length}>{busy ? 'Berechnet…' : 'Generate Learning Plan'}</button>
       </section>
       <section className="panel"><div className="section-head"><div><span className="eyebrow">Diagnostic suite</span><h2>Challenge Cases</h2></div></div><div className="challenge-list">{challenges.map(item => <button key={item.id} onClick={() => runChallenge(item.id)} disabled={!!challengeBusy}><strong>{item.name}</strong><span>{item.description}</span><i>{challengeBusy === item.id ? 'läuft…' : 'Run →'}</i></button>)}</div></section>
     </div>
@@ -80,10 +91,10 @@ function PlanOutput({ result, colorByExam }: { result: PlaygroundResult; colorBy
   }, {})
   const comparisons: [string, Plan][] = [...(result.ai ? [['AI', result.ai] as [string, Plan]] : []), ...Object.entries(result.baselines || {})]
   const maxReward = Math.max(...comparisons.map(([, value]) => value.reward.total), 1)
-  const rewardKeys = ['preparation','deadline','spacing','early_start','coverage','fairness','utilization','overlearning','fatigue','switching','break_quality','cramming']
+  const rewardKeys = ['preparation','deadline','spacing','early_start','coverage','fairness','routine_fulfillment','routine_overfill','routine_distribution','exam_substitution_credit','duplicate_work','method_adherence','plan_stability','utilization','overlearning','fatigue','switching','break_quality','cramming']
   return <>
     <section className="panel plan-panel"><div className="section-head"><div><span className="eyebrow">Generated schedule</span><h2>{plan.source}</h2></div><div className="score-badge"><span>Reward</span><strong>{plan.reward.total.toFixed(2)}</strong></div></div>
-      <div className="timeline">{Object.entries(grouped).map(([day, sessions]) => <div className="timeline-day" key={day}><div><span>Tag {+day + 1}</span><small>{days[+day % 7]}</small></div><div>{sessions.map((session, index) => <div className={`session ${session.kind}`} key={index} style={{ '--session-color': session.exam_id ? colorByExam[session.exam_id] || colors[index % colors.length] : '#3c4653' } as React.CSSProperties}><time>{formatTime(session.start_minute)}–{formatTime(session.end_minute)}</time><strong>{session.subject}</strong><span>{session.kind === 'break' ? 'Regeneration / frei' : `${session.end_minute - session.start_minute} min`}</span></div>)}</div></div>)}</div>
+      <div className="timeline">{Object.entries(grouped).map(([day, sessions]) => <div className="timeline-day" key={day}><div><span>Tag {+day + 1}</span><small>{days[+day % 7]}</small></div><div>{sessions.map((session, index) => <div className={`session ${session.kind}`} key={index} style={{ '--session-color': session.exam_id ? colorByExam[session.exam_id] || colors[index % colors.length] : session.routine_id ? '#53d4dd' : '#3c4653' } as React.CSSProperties}><time>{formatTime(session.start_minute)}–{formatTime(session.end_minute)}</time><strong>{session.subject}</strong><span>{session.kind === 'break' ? 'Regeneration / frei' : `${session.end_minute - session.start_minute} min${session.routine_credit_ids?.length ? ` · erfüllt ${session.routine_credit_ids.join(', ')}` : ''}`}</span></div>)}</div></div>)}</div>
       <p className="inference-note">Inference: {plan.inference_ms.toFixed(2)} ms · 30-Minuten-Entscheidungen wurden zu Sessions zusammengeführt.</p>
     </section>
     <section className="panel analysis-panel"><div className="section-head"><div><span className="eyebrow">Plan diagnostics · Reward v{String(plan.reward.reward_version || '2.0')}</span><h2>Reward Breakdown</h2></div></div><div className="reward-grid">{rewardKeys.map(key => <div key={key}><span>{key.replace('_',' ')}</span><strong className={Number(plan.reward[key]) < 0 ? 'negative' : ''}>{Number(plan.reward[key]).toFixed(2)}</strong></div>)}</div>

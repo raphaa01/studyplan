@@ -6,14 +6,16 @@ from pathlib import Path
 
 import numpy as np
 
-from .config import EVALUATION_FILE, EVALUATION_SEED, EVALUATION_SIZE, MAX_EXAMS, SLOT_MINUTES
-from .schemas import Exam, Situation, StudySlot, TimeWindow
+from .config import EVALUATION_FILE, EVALUATION_SEED, EVALUATION_SIZE, MAX_EXAMS, MAX_TARGETS, SLOT_MINUTES
+from .schemas import Exam, LearningFeedback, LearningRoutine, Situation, StudySlot, TimeWindow
+from .targets import normalize_subject
 
 
 SUBJECTS = [
     "Mathematik", "Deutsch", "Englisch", "Geschichte", "Biologie",
     "Chemie", "Physik", "Geografie", "Informatik", "Politik",
 ]
+METHODS = ["pomodoro", "spaced_repetition", "interleaving", "active_recall", "exam_simulation", "auto"]
 
 
 class SituationGenerator:
@@ -49,9 +51,36 @@ class SituationGenerator:
             need = int(np.clip(base_need * rng.uniform(0.75, 1.3), 60, 900) // 30 * 30)
             invested = int(rng.choice([0, 0, 0, 30, 60, 90])) if level >= 3 else 0
             exams.append(Exam(
-                id=f"exam-{index + 1}", subject=subjects[index], kind=kind,
+                id=f"exam-{index + 1}", subject=subjects[index], subject_id=normalize_subject(subjects[index]), kind=kind,
                 days_until=int(deadline), difficulty=difficulty, importance=importance,
                 invested_minutes=invested, estimated_need_minutes=need,
+                learning_method=str(rng.choice(METHODS)),
+                feedback=LearningFeedback(
+                    difficulty=float(rng.uniform(.25, .85)), confidence=float(rng.uniform(.2, .9)),
+                    completion_rate=float(rng.uniform(.55, 1)), missed_sessions=int(rng.integers(0, 3)),
+                    planned_minutes=60, actual_minutes=int(rng.choice([30, 45, 60, 75])),
+                    days_since_success=int(rng.integers(0, 14)),
+                ) if level >= 3 and rng.random() < .45 else None,
+            ))
+
+        routine_count = 0 if level == 1 else int(rng.integers(1, min(5, MAX_TARGETS - exam_count) + 1))
+        routines: list[LearningRoutine] = []
+        for index in range(routine_count):
+            same_subject = level >= 3 and rng.random() < .45
+            subject = str(rng.choice(subjects if same_subject else SUBJECTS))
+            routines.append(LearningRoutine(
+                id=f"routine-{index + 1}", subject=subject, subject_id=normalize_subject(subject),
+                title=f"{subject} regelmäßig üben", sessions_per_week=int(rng.integers(1, 4)),
+                preferred_session_minutes=int(rng.choice([30, 30, 60])),
+                difficulty=int(rng.integers(2, 9)), importance=int(rng.integers(2, 8)),
+                learning_method=str(rng.choice(METHODS[:-1])), flexible=True,
+                preferred_weekdays=sorted(set(int(x) for x in rng.choice(np.arange(7), size=int(rng.integers(0, 3)), replace=False))),
+                feedback=LearningFeedback(
+                    difficulty=float(rng.uniform(.2, .8)), confidence=float(rng.uniform(.25, .9)),
+                    completion_rate=float(rng.uniform(.5, 1)), missed_sessions=int(rng.integers(0, 3)),
+                    planned_minutes=60, actual_minutes=int(rng.choice([30, 45, 60])),
+                    days_since_success=int(rng.integers(0, 18)),
+                ) if level >= 4 and rng.random() < .4 else None,
             ))
 
         windows: list[TimeWindow] = []
@@ -84,9 +113,32 @@ class SituationGenerator:
         situation_seed = int(seed if seed is not None else rng.integers(0, 2**31 - 1))
         digest = hashlib.sha1(json.dumps({"s": situation_seed, "e": exam_count, "h": horizon}).encode()).hexdigest()[:12]
         return Situation(
-            id=f"s-{digest}", exams=exams, windows=windows, slots=slots,
-            curriculum_level=level, seed=situation_seed,
+            id=f"s-{digest}", exams=exams, routines=routines, windows=windows, slots=slots,
+            curriculum_level=level, seed=situation_seed, schema_version="3.0",
         )
+
+    def generate_group(self, group: str, seed: int) -> Situation:
+        """Deterministic grouped holdouts used by gates and the Lab UI."""
+        situation = self.generate(level=5, seed=seed)
+        if group == "exam_only":
+            return situation.model_copy(update={"routines": []})
+        if group == "routine_only":
+            routines = situation.routines or [LearningRoutine(
+                id="routine-1", subject="Mathematik", subject_id="mathematik", title="Mathematik üben",
+                sessions_per_week=2, learning_method="spaced_repetition",
+            )]
+            return situation.model_copy(update={"exams": [], "routines": routines})
+        if group == "same_subject_credit" and situation.exams:
+            exam = situation.exams[0]
+            routine = LearningRoutine(
+                id="same-subject-routine", subject=exam.subject, subject_id=exam.subject_id,
+                title=f"{exam.subject} Routine", sessions_per_week=2, learning_method="interleaving",
+            )
+            return situation.model_copy(update={"routines": [routine]})
+        if group == "scarcity":
+            slots = situation.slots[:max(1, min(4, len(situation.slots)))]
+            return situation.model_copy(update={"slots": slots})
+        return situation
 
 
 def windows_to_slots(windows: list[TimeWindow]) -> list[StudySlot]:
@@ -108,10 +160,13 @@ def windows_to_slots(windows: list[TimeWindow]) -> list[StudySlot]:
 
 def ensure_evaluation_set(path: Path = EVALUATION_FILE, size: int = EVALUATION_SIZE) -> list[Situation]:
     if path.exists():
-        return [Situation.model_validate(item) for item in json.loads(path.read_text(encoding="utf-8"))]
+        items = [Situation.model_validate(item) for item in json.loads(path.read_text(encoding="utf-8"))]
+        if items and all(item.schema_version == "3.0" for item in items):
+            return items
     path.parent.mkdir(parents=True, exist_ok=True)
     generator = SituationGenerator(EVALUATION_SEED)
-    situations = [generator.generate(level=5, seed=EVALUATION_SEED + i) for i in range(size)]
+    groups = ["exam_only", "routine_only", "same_subject_credit", "scarcity", "mixed"]
+    situations = [generator.generate_group(groups[i % len(groups)], EVALUATION_SEED + i) for i in range(size)]
     path.write_text(json.dumps([item.model_dump(mode="json") for item in situations], ensure_ascii=False), encoding="utf-8")
     return situations
 

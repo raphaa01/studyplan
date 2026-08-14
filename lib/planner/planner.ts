@@ -5,6 +5,7 @@ import { estimateExamMinutes, examPriority, topicUncertainty } from "./priority"
 import { phaseFor, spacingScore } from "./spacing";
 import { rationaleFor, sessionCopy } from "./session-generator";
 import { resolvedLearningMethod } from "@/lib/learning-methods";
+import { stableSubjectId } from "./subject-normalization";
 
 interface ExamState {
   exam: Exam;
@@ -86,16 +87,47 @@ function methodPhase(exam: Exam, daysLeft: number, progress: number, repeat: num
   return phaseFor(daysLeft, progress);
 }
 
+function feedbackNeedMultiplier(input: PlannerInput, sessions: StudySession[]): number {
+  const feedback = (input.feedback ?? []).filter((item) => sessions.some((session) => session.id === item.sessionId));
+  if (!feedback.length) return 1;
+  const difficulty = { "very-hard": 1, hard: 0.75, okay: 0.5, easy: 0.25, "very-easy": 0 } as const;
+  const pressure = feedback.reduce((sum, item) => {
+    const confidence = item.confidence ? (item.confidence - 1) / 4 : 0.5;
+    const timeRatio = (item.actualMinutes ?? item.plannedMinutes ?? 30) / Math.max(item.plannedMinutes ?? 30, 25);
+    return sum + 0.32 * (difficulty[item.difficulty] - 0.5) + 0.28 * (0.5 - confidence)
+      + 0.2 * (1 - Math.min(1, item.completionRate ?? 1)) + (item.missed ? 0.12 : 0)
+      + 0.08 * Math.max(0, 1 - timeRatio);
+  }, 0) / feedback.length;
+  return Math.min(1.3, Math.max(0.75, 1 + pressure));
+}
+
+function subtractSessions(windows: TimeWindow[], date: string, sessions: StudySession[]): TimeWindow[] {
+  const occupied = sessions.filter((session) => session.date === date).map((session) => ({
+    start: minutesFromTime(session.startTime), end: minutesFromTime(session.startTime) + session.duration,
+  }));
+  return windows.flatMap((window) => {
+    let segments = [{ start: minutesFromTime(window.start), end: minutesFromTime(window.end) }];
+    for (const block of occupied) {
+      segments = segments.flatMap((segment) => block.end <= segment.start || block.start >= segment.end ? [segment] : [
+        { start: segment.start, end: Math.min(segment.end, block.start) },
+        { start: Math.max(segment.start, block.end), end: segment.end },
+      ].filter((part) => part.end - part.start >= 25));
+    }
+    return segments.map((segment, index) => ({ id: `${window.id}-study-free-${index}`, start: timeFromMinutes(segment.start), end: timeFromMinutes(segment.end) }));
+  });
+}
+
 export function generateStudyPlan(input: PlannerInput, options: PlannerOptions = {}): StudyPlan {
   const today = input.now?.slice(0, 10) ?? startOfToday();
   const activeExams = input.exams.filter((exam) => exam.date >= today).sort((a, b) => a.date.localeCompare(b.date));
-  const rangeEnd = activeExams.at(-1)?.date ?? addDays(today, 7);
+  const rangeEnd = [activeExams.at(-1)?.date, addDays(today, 7), ...(input.routines ?? []).map((routine) => routine.activeUntil)]
+    .filter((value): value is string => Boolean(value)).sort().at(-1) ?? addDays(today, 7);
   const completed = (input.previousSessions ?? []).filter((session) => session.status === "completed");
   const states: ExamState[] = activeExams.map((exam) => {
     const done = completed.filter((session) => session.examId === exam.id);
     return {
       exam,
-      target: Math.max(25, estimateExamMinutes(exam, today) - done.reduce((sum, session) => sum + session.duration, 0)),
+      target: Math.max(25, Math.round(estimateExamMinutes(exam, today) * feedbackNeedMultiplier(input, done)) - done.reduce((sum, session) => sum + session.duration, 0)),
       planned: 0,
       sessionDates: done.map((session) => session.date).sort(),
       topicCounts: new Map(exam.topics.map((topic) => [topic.id, done.filter((session) => session.topicId === topic.id).length])),
@@ -169,6 +201,10 @@ export function generateStudyPlan(input: PlannerInput, options: PlannerOptions =
         learningSessions.push({
           id: `session-${date}-${sequence}`,
           examId: state.exam.id,
+          routineId: null,
+          routineCreditIds: (input.routines ?? []).filter((routine) => routine.enabled
+            && stableSubjectId(routine.subjectId, routine.subject) === stableSubjectId(state.exam.subjectId, state.exam.subject))
+            .map((routine) => routine.id),
           topicId: topic.id,
           date,
           startTime: timeFromMinutes(cursor),
@@ -195,6 +231,39 @@ export function generateStudyPlan(input: PlannerInput, options: PlannerOptions =
         cursor += hasModelDecision ? 30 : duration + plannedBreak;
         if (remainingWindow * (1 - buffer) < 25) break;
       }
+    }
+  }
+
+  // Flexible routine pass: exams are already placed and count once toward a same-subject weekly goal.
+  for (let offset = 0; offset <= Math.min(45, daysBetween(today, rangeEnd)); offset += 1) {
+    const date = addDays(today, offset);
+    const weekday = new Date(`${date}T12:00:00`).getDay();
+    const availability = input.availability.find((item) => item.day === weekday && item.enabled);
+    if (!availability) continue;
+    for (const routine of (input.routines ?? []).filter((item) => item.enabled
+      && (!item.activeFrom || item.activeFrom <= date) && (!item.activeUntil || item.activeUntil >= date))) {
+      if (routine.preferredWeekdays?.length && !routine.preferredWeekdays.includes(weekday)) continue;
+      const weekStart = addDays(today, Math.floor(offset / 7) * 7);
+      const weekEnd = addDays(weekStart, 6);
+      const creditedDays = new Set(learningSessions.filter((session) => session.date >= weekStart && session.date <= weekEnd
+        && (session.routineId === routine.id || session.routineCreditIds?.includes(routine.id))).map((session) => session.date));
+      if (creditedDays.size >= routine.sessionsPerWeek || creditedDays.has(date)) continue;
+      const usedToday = learningSessions.filter((session) => session.date === date).reduce((sum, session) => sum + session.duration, 0);
+      if (usedToday >= maxDaily) continue;
+      const free = subtractSessions(freeWindowsForDate(availability.windows, date, input), date, learningSessions)[0];
+      if (!free) continue;
+      const method = routine.learningMethod === "auto" ? "spaced-repetition" : routine.learningMethod;
+      const desired = method === "pomodoro" ? 25 : method === "exam-simulation" ? 60 : routine.preferredSessionMinutes;
+      const duration = Math.min(desired, minutesFromTime(free.end) - minutesFromTime(free.start), maxDaily - usedToday);
+      if (duration < 25) continue;
+      learningSessions.push({
+        id: `routine-${routine.id}-${date}-${sequence}`, examId: null, routineId: routine.id, routineCreditIds: [], topicId: null,
+        date, startTime: free.start, duration, type: method === "active-recall" ? "recall" : method === "exam-simulation" ? "simulation" : "practice",
+        title: routine.title, description: `Flexible ${routine.subject}-Routine nach der gewählten Lernmethode.`, status: "planned",
+        rationale: `Erfüllt Einheit ${creditedDays.size + 1} von ${routine.sessionsPerWeek}; Prüfungsvorbereitung hatte Vorrang.`,
+        intensity: routine.difficulty >= 4 ? "high" : routine.difficulty <= 2 ? "light" : "medium", sequence,
+      });
+      sequence += 1;
     }
   }
 

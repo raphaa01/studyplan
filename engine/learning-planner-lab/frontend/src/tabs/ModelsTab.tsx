@@ -29,7 +29,7 @@ export default function ModelsTab({ models, refresh, openTraining, openPlaygroun
       <div className="model-table-wrap"><table className="model-table"><thead><tr><th></th><th>Modell</th><th>Evaluation</th><th>Fresh holdout</th><th>Größe</th><th>Training</th><th></th></tr></thead><tbody>
         {[...models].reverse().map(model => <tr key={model.id}>
           <td><input type="checkbox" checked={selected.includes(model.id)} onChange={() => toggle(model.id)} /></td>
-          <td><strong>{model.name}</strong><small>{model.id} · Reward v{model.reward_version || '1.0'} · {new Date(model.created_at).toLocaleString('de-DE')}<br />Parent: {model.parent_model || '—'}{model.selected_best_checkpoint ? ' · Best checkpoint' : ''}</small></td>
+          <td><strong>{model.name} {model.website_candidate ? '· Website-Kandidat' : ''}</strong><small>{model.id} · Schema {model.schema_version || '2.0'} · Reward v{model.reward_version || '1.0'} · {new Date(model.created_at).toLocaleString('de-DE')}<br />Parent: {model.parent_model || '—'}{model.selected_best_checkpoint ? ' · Best checkpoint' : ''}{!model.training_compatible ? ' · inkompatibler Parent' : ''}</small></td>
           <td className="score">{model.evaluation_score.toFixed(2)}</td><td>{model.fresh_test_score.toFixed(2)}</td>
           <td><span className={model.exceeds_8mb ? 'warning' : ''}>{formatBytes(model.size_bytes)}</span><small>{model.parameters.toLocaleString('de-DE')} Parameter</small></td>
           <td>{model.training_steps.toLocaleString('de-DE')} Steps<small>{formatDuration(model.training_duration_seconds)} · Seed {model.seed}</small></td>
@@ -42,7 +42,7 @@ export default function ModelsTab({ models, refresh, openTraining, openPlaygroun
       </tbody></table></div>
     </section>
     {compared.length > 0 && <section className="panel compare-panel"><div className="section-head"><div><span className="eyebrow">Side-by-side</span><h2>Modellvergleich</h2></div></div>
-      {mixedRewardVersions && <p className="status-message">Achtung: Reward-v1- und Reward-v2-Scores messen unterschiedliche Ziele und sind numerisch nicht direkt vergleichbar.</p>}
+      {mixedRewardVersions && <p className="status-message">Achtung: Scores verschiedener Reward-Versionen messen unterschiedliche Ziele und sind numerisch nicht direkt vergleichbar.</p>}
       <div className="compare-cards">{compared.map(model => <div className="compare-card" key={model.id}><strong>{model.name}</strong><dl>
         <div><dt>Evaluation</dt><dd>{model.evaluation_score.toFixed(2)}</dd></div><div><dt>Reward</dt><dd>v{model.reward_version || '1.0'}</dd></div><div><dt>Fresh</dt><dd>{model.fresh_test_score.toFixed(2)}</dd></div><div><dt>Größe</dt><dd>{formatBytes(model.size_bytes)}</dd></div><div><dt>Steps</dt><dd>{model.training_steps.toLocaleString('de-DE')}</dd></div>
       </dl></div>)}</div>

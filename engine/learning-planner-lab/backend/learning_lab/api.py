@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .baselines import BASELINES
 from .challenges import challenge_cases
-from .config import MODELS_DIR, ROOT, ensure_directories
+from .config import MAX_TARGETS, MODELS_DIR, ROOT, ensure_directories
 from .exporter import export_onnx
 from .generator import ensure_evaluation_set, windows_to_slots
 from .manager import TrainingManager
@@ -23,7 +23,7 @@ ensure_directories()
 ensure_evaluation_set()
 registry = ModelRegistry()
 training = TrainingManager(registry)
-app = FastAPI(title="Learning Planner Lab", version="0.2.0")
+app = FastAPI(title="Learning Planner Lab", version="0.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
@@ -47,7 +47,7 @@ def start_training(command: TrainingCommand):
         return training.start(command.config)
     except KeyError as exc:
         raise HTTPException(404, f"Parent model {exc.args[0]} was not found") from exc
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(409, str(exc)) from exc
 
 
@@ -103,6 +103,8 @@ def export_model(model_id: str):
     except KeyError as exc:
         raise HTTPException(404, "Model not found") from exc
     target = MODELS_DIR / model_id / "model.onnx"
+    if not payload["registry"].get("training_compatible"):
+        raise HTTPException(409, "Legacy QECore models retain their existing export; v3 export requires schema 3.0")
     try:
         return export_onnx(model, target)
     except Exception as exc:
@@ -122,8 +124,10 @@ def download_model(model_id: str, format: str):
 
 @app.post("/api/playground/plan")
 def playground_plan(request: PlaygroundRequest):
-    if not request.exams or len(request.exams) > 8:
-        raise HTTPException(422, "Provide between one and eight exams")
+    if not request.exams and not request.routines:
+        raise HTTPException(422, "Provide at least one exam or routine")
+    if len(request.exams) + len(request.routines) > MAX_TARGETS:
+        raise HTTPException(422, f"Provide at most {MAX_TARGETS} planning targets")
     today = date.today()
     exams: list[Exam] = []
     for value in request.exams:
@@ -133,16 +137,17 @@ def playground_plan(request: PlaygroundRequest):
         if days_until > 60:
             raise HTTPException(422, f"{value.subject}: version 0.2 supports a planning horizon of at most 60 days")
         exams.append(Exam(
-            id=value.id, subject=value.subject, kind=value.kind, days_until=days_until,
+            id=value.id, subject=value.subject, subject_id=value.subject_id, kind=value.kind, days_until=days_until,
             difficulty=value.difficulty, importance=value.importance,
             invested_minutes=value.invested_minutes, estimated_need_minutes=value.estimated_need_minutes,
+            learning_method=value.learning_method, feedback=value.feedback,
         ))
     slots = windows_to_slots(request.windows)
     if not slots:
         raise HTTPException(422, "At least one complete 30-minute availability slot is required")
     situation = Situation(
-        id="playground", exams=exams, windows=request.windows, slots=slots,
-        curriculum_level=5, seed=request.seed,
+        id="playground", exams=exams, routines=request.routines, windows=request.windows, slots=slots,
+        curriculum_level=5, seed=request.seed, schema_version="3.0",
     )
     output: dict[str, object] = {"situation": situation.model_dump(mode="json")}
     if request.model_id:

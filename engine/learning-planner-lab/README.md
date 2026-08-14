@@ -1,6 +1,6 @@
 # Learning Planner Lab
 
-Learning Planner Lab ist eine vollständig lokal laufende Webanwendung, in der ein kleines neuronales Netz lernt, verfügbare Lernzeit auf mehrere Prüfungen zu verteilen. Das Projekt ist kein UI-Mockup: Training, Reward, Losses, Evaluation, Systemtelemetrie, Modelldateien und Exporte stammen aus den real ausgeführten Backendprozessen.
+Learning Planner Lab ist eine vollständig lokal laufende Webanwendung, in der QECore lernt, verfügbare Lernzeit auf Prüfungen und flexible Wochenroutinen zu verteilen. Das Projekt ist kein UI-Mockup: Training, Reward, Losses, gruppierte Evaluation, Systemtelemetrie, Modelldateien und Exporte stammen aus den real ausgeführten Backendprozessen.
 
 ## Funktionsumfang
 
@@ -8,13 +8,13 @@ Learning Planner Lab ist eine vollständig lokal laufende Webanwendung, in der e
 - sehr kleines permutationsequivariantes Netz (typisch deutlich unter 1 MB)
 - dynamischer In-Memory-Generator mit fünf Curriculum-Stufen
 - diskrete 30-Minuten-Slots und konsequentes Action Masking
-- versioniertes Reward-System v2 mit bedarfsbegrenzter Preparation, Fairness, Spacing, opportunity-aware Cramming, Überlernen, Fatigue und sinnvollen Pausen
-- vier echte Baselines: Random, Earliest Deadline First, Weighted Priority und Greedy Marginal Utility
+- rückwärtskompatibles Reward v2 für QECore v1.07 und neues Reward v3 für Prüfungen, Routinen, Methoden, Feedback und Planstabilität
+- fünf echte Baselines inklusive Hybrid Exam + Routine
 - feste 1.000-Situationen-Evaluation mit Seed `20260314` plus 250 frisch generierte Holdout-Fälle pro Modell
 - startbares, pausierbares, fortsetzbares und sauber stoppbares Training mit Best-Checkpoint-Auswahl und adaptiver Learning Rate
 - versionierte lokale Model Registry inklusive Parent-Beziehung und reproduzierbarer Metadaten
 - PyTorch- und ONNX-Export mit automatischer Lade- und numerischer Paritätsprüfung
-- Playground mit eigenen Prüfungen, mehreren Zeitfenstern pro Tag, Kalender-Timeline, Reward-Analyse und Baselinevergleich
+- Playground mit Prüfungen, Routinen, Frequenz, Lernmethoden, sichtbarem Routine-Credit und Reward-v3-Analyse
 - sieben vordefinierte Challenge Cases
 - echte CPU-, RAM-, Thread-, Steps/s- und Episodes/s-Messwerte
 
@@ -38,7 +38,7 @@ Für Entwicklung mit Hot Reload kann nach dem Setup `dev.bat` verwendet werden. 
 
 ## Der vollständige Arbeitsfluss
 
-Im Tab **Training** wird ein neues Modell gewählt oder ein vorhandenes Parent-Modell weitertrainiert. Die Presets reichen von 5.000 bis 2.000.000 Environment Steps; Custom erlaubt eine eigene Länge. PPO-Parameter, Seed, Parallelität und Curriculum sind direkt einstellbar. Die Oberfläche pollt ausschließlich reale Statusdaten aus dem Trainingsprozess.
+Im Tab **Training** wird QECore v1.08 neu trainiert oder ein kompatibles Schema-3-Modell fortgesetzt. Das Multi-million-Preset verwendet 5.000.000 Steps; Custom erlaubt bis 100.000.000. QECore v1.07 ist wegen der anderen Shapes kein direkter Parent. Für Vergleichsläufe kann explizit ein kontrollierter Transfer gewählt werden, der nur formgleiche Layer übernimmt und Eingabe-, Context- und Optimizer-Zustand neu startet.
 
 Nach einem vollständigen Lauf:
 
@@ -46,14 +46,15 @@ Nach einem vollständigen Lauf:
 2. läuft die Policy deterministisch über den unveränderten 1.000er-Benchmark,
 3. läuft sie über 250 neue Testfälle,
 4. werden die Baselines auf demselben festen Benchmark verglichen,
-5. entsteht automatisch `model-vNNN`,
-6. wird ONNX exportiert, geladen und gegen PyTorch geprüft.
+5. entstehen zehn gruppierte Holdouts und harte Website-Kandidaten-Gates,
+6. entsteht automatisch die nächste Registry-ID; nach v007 also `model-v008` mit Anzeigename **QECore v1.08**,
+7. werden ONNX, Browser-Manifest, Golden Vector und SHA-256 reproduzierbar exportiert und gegen PyTorch geprüft.
 
 Im Tab **Models** können Versionen verglichen, umbenannt, gelöscht, exportiert, weitertrainiert oder im Playground geöffnet werden. Im Tab **Playground** entstehen echte Pläne aus dem ausgewählten Checkpoint.
 
 ## Modellarchitektur
 
-Das Netz verarbeitet maximal acht Prüfungen. Jede Prüfung wird mit demselben zweilagigen MLP (`11 → 64 → 64`) codiert. Mean Pooling über vorhandene Prüfungen liefert einen permutationsinvarianten Situationskontext. Ein globaler Zustandsvektor beschreibt unter anderem Slotposition, Uhrzeit, bisherige Auslastung, Sessionlänge und Curriculum-Stufe.
+Das v3-Netz verarbeitet maximal zwölf gemeinsame `PlanningTarget`-Zeilen (`exam` oder `routine`). Jede Zeile wird mit demselben zweilagigen MLP (`24 → 64 → 64`) codiert. Das explizite Presence-Feature ist unabhängig von Deadline und Maske. Mean Pooling liefert einen permutationsinvarianten Kontext; 16 globale Features beschreiben Woche, Restkapazität, Routinedefizit, Tageslast, Fokusfolge und Prüfungsbelastung.
 
 Der Policy Head bewertet jede Prüfung mit derselben Scoring-Funktion. Daher permutieren die Prüfungslogits mit der Eingabe; ein Fach wird nicht durch seine Listenposition bevorzugt. Ein eigener Idle-Logit erlaubt freie Zeit/Pausen. Der Value Head schätzt den diskontierten Return. Nicht existierende oder bereits geschriebene Prüfungen werden vor der Aktionsauswahl maskiert.
 
@@ -67,7 +68,7 @@ Training Samples werden fortlaufend im Arbeitsspeicher erzeugt. Ein separater fe
 
 ## Reward-System
 
-Reward v2 bewertet geschätzte Lernbereitschaft statt Kalenderauslastung. Lernzeit wirkt über eine sättigende Kurve bis zum geschätzten Restbedarf; Vorwissen wird angerechnet. Freie Zeit ist neutral. Zusätzliche Zeit über einer kleinen Unsicherheitsmarge verliert Nutzen und wird explizit als Überlernen erfasst.
+Reward v3 erweitert die unverändert erhaltene v2-Prüfungslogik. Prüfungsreadiness bleibt dominant. Routinen erhalten einen moderaten Nutzen für Wochenfrequenz und Verteilung; Überfüllung und Doppelarbeit werden bestraft. Prüfungseinheiten desselben stabil normalisierten Fachs geben genau einmal Routine-Credit. Lernmethoden werden über semantische Zeitparameter bewertet. Feedback passt den Bedarf nur begrenzt auf 75–130 Prozent an.
 
 Die Aggregation verwendet:
 
@@ -100,8 +101,8 @@ Ein steigender Reward beweist keine besseren realen Noten. Eine spätere Produkt
 
 ```text
 data/
-  evaluation_set.json       fester Benchmark (beim ersten Start generiert)
-  baseline_evaluation.json  wiederverwendbarer Baseline-Cache
+  evaluation_set-schema-3.0-reward-3.0.json  versionierter Benchmark
+  baseline_evaluation.json                   schema-/reward-geprüfter Cache
   registry.json             Model Registry
 models/
   model-v001/
@@ -133,7 +134,7 @@ $env:PYTHONPATH = "$PWD\backend"
 .venv\Scripts\python.exe -m pytest
 ```
 
-Die Tests prüfen Generatorgrenzen und Slotüberlappungen, Masking, ungültige Aktionen, NaN-freie Rewards, Reward-Hacking-Szenarien, Baselinepläne, Permutationsäquivarianz, Speichern/Laden, Registry-Versionierung, kurzes echtes Weitertraining, reproduzierbare Evaluation und ONNX-Parität.
+Die Tests prüfen zusätzlich Routine-Credit, keine Doppelzählung, Verdrängung bei Knappheit, Wochenwechsel, Feedbackgrenzen, Methodenfeatures, v007-Kompatibilitätstransfer, Golden-Vector-Export und Browser-Fallback.
 
 ## API
 
@@ -168,7 +169,7 @@ frontend/src/
 
 ## Bekannte Einschränkungen
 
-- Version 0.1 plant maximal acht Prüfungen und verwendet feste 30-Minuten-Slots.
+- Schema 3 plant maximal zwölf Ziele und verwendet feste 30-Minuten-Slots; Pomodoro bildet darin 25 Minuten Fokus plus sichtbare Pause ab.
 - CPU-Training ist bewusst lokal; lange Presets können Stunden dauern.
 - Der Generator bildet nicht jede Schulform, Lernstörung oder individuelle Präferenz ab.
 - Belohnungsgewichte sind transparent und getestet, aber nicht durch eine longitudinale Lernstudie kalibriert.

@@ -36,6 +36,6 @@ def test_playground_generates_full_baseline_plan() -> None:
     response = client.post("/api/playground/plan", json=payload)
     assert response.status_code == 200, response.text
     result = response.json()
-    assert set(result["baselines"]) == {"random", "edf", "weighted", "greedy"}
+    assert set(result["baselines"]) == {"random", "edf", "weighted", "greedy", "hybrid"}
     assert len(result["baselines"]["greedy"]["assignments"]) == 8
     assert result["baselines"]["greedy"]["sessions"]

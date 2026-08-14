@@ -42,6 +42,7 @@ export interface ExamTopic {
 
 export interface Exam {
   id: string;
+  subjectId?: string;
   subject: string;
   title: string;
   type: ExamType;
@@ -53,6 +54,24 @@ export interface Exam {
   color: string;
   topics: ExamTopic[];
   learningMethod: LearningMethodId;
+}
+
+export interface LearningRoutine {
+  id: string;
+  subjectId: string;
+  subject: string;
+  title: string;
+  sessionsPerWeek: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  preferredSessionMinutes: number;
+  importance: 1 | 2 | 3 | 4 | 5;
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  learningMethod: LearningMethodId;
+  topics?: string[];
+  preferredWeekdays?: number[];
+  activeFrom?: string;
+  activeUntil?: string;
+  flexible: boolean;
+  enabled: boolean;
 }
 
 export interface CalendarItem {
@@ -80,6 +99,8 @@ export interface ActivityRecord {
 export interface StudySession {
   id: string;
   examId: string | null;
+  routineId?: string | null;
+  routineCreditIds?: string[];
   topicId: string | null;
   date: string;
   startTime: string;
@@ -98,6 +119,10 @@ export interface StudySessionFeedback {
   difficulty: "very-hard" | "hard" | "okay" | "easy" | "very-easy";
   confidence: Confidence;
   completedAt: string;
+  completionRate?: number;
+  missed?: boolean;
+  plannedMinutes?: number;
+  actualMinutes?: number;
 }
 
 export interface LearningSessionProgress {
@@ -149,6 +174,7 @@ export interface StudyData {
 export interface PlannerInput {
   availability: AvailabilityDay[];
   exams: Exam[];
+  routines?: LearningRoutine[];
   previousSessions?: StudySession[];
   feedback?: StudySessionFeedback[];
   calendarItems?: CalendarItem[];
