@@ -1,0 +1,23 @@
+{
+  "reward_version": "3.0",
+  "schema_version": "3.0",
+  "training_steps": 10000000,
+  "evaluation_score": 50.38759526459257,
+  "fresh_test_score": 65.64537565350547,
+  "best_validation_reward": 73.61359134989405,
+  "best_step": 8650112,
+  "selected_best_checkpoint": true,
+  "website_candidate": false,
+  "acceptance_gates": {
+    "no_invalid_or_deadline_actions": true,
+    "routine_fulfillment": false,
+    "same_subject_no_double_count": true,
+    "browser_size_under_1mb": true,
+    "exam_readiness_floor": true,
+    "exam_only_not_materially_worse_than_v007": false,
+    "fatigue_within_limit": true,
+    "onnx_parity": true,
+    "onnx_under_1mb": true,
+    "reproducible_sha256": true
+  }
+}
