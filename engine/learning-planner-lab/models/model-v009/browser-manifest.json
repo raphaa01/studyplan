@@ -1,0 +1,79 @@
+{
+  "model_name": "QECore v1.09",
+  "schema_version": "3.0",
+  "reward_version": "3.0",
+  "slot_minutes": 30,
+  "max_targets": 12,
+  "inputs": {
+    "targets": [
+      1,
+      12,
+      24
+    ],
+    "global_features": [
+      1,
+      16
+    ],
+    "action_mask": [
+      1,
+      13
+    ]
+  },
+  "outputs": {
+    "logits": [
+      1,
+      13
+    ],
+    "value": [
+      1
+    ]
+  },
+  "action_mapping": "0=idle; 1..N=target row + 1; padded rows masked false",
+  "present_feature_index": 0,
+  "sha256": "63de446731d48c174ee606530f47e34a5993575c2725eadf24d199a3554c5df8",
+  "target_feature_order": [
+    "present",
+    "is_exam",
+    "is_routine",
+    "has_deadline",
+    "deadline_days_div_30",
+    "remaining_need_minutes_div_900",
+    "invested_minutes_div_900",
+    "difficulty_div_10",
+    "importance_div_10",
+    "desired_block_slots_div_4",
+    "spacing_preference",
+    "interleaving_preference",
+    "preferred_phase",
+    "retrieval_intensity",
+    "weekly_sessions_div_7",
+    "weekly_fulfilled_ratio",
+    "remaining_week_slots_div_28",
+    "last_gap_days_div_7",
+    "distinct_study_days_div_7",
+    "exam_routine_credit_ratio",
+    "allowed_now",
+    "feedback_difficulty",
+    "feedback_confidence",
+    "is_flexible"
+  ],
+  "global_feature_order": [
+    "weekday_div_6",
+    "position_in_week",
+    "slot_position",
+    "remaining_week_slots_ratio",
+    "routine_deficit_div_12",
+    "daily_load_slots_div_6",
+    "focus_run_slots_div_6",
+    "exam_burden_minutes_div_1800",
+    "flexible_share",
+    "mandatory_share",
+    "minute_of_day_div_1440",
+    "previous_was_idle",
+    "curriculum_level_div_5",
+    "target_count_div_12",
+    "studied_slot_ratio",
+    "is_contiguous"
+  ],
+  "fallback": "Use deterministic planner on load/hash/shape/runtime/non-finite/action-mask failure"
+}
