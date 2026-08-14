@@ -21,6 +21,9 @@ export interface PlannerAllocation {
   slots: Map<string, string | null>;
   inferenceMs: number;
   modelSha256: string;
+  engine: "model-v007" | "qecore-v1.09";
+  rewardVersion: "2.0" | "3.0";
+  idleBehavior?: "reserve" | "fallback";
 }
 
 export interface PlannerOptions {
@@ -156,8 +159,18 @@ export function generateStudyPlan(input: PlannerInput, options: PlannerOptions =
       while (cursor + 25 <= end && dailyLearning < maxDaily) {
         const slotKey = plannerSlotKey(date, cursor);
         const hasModelDecision = options.allocation?.slots.has(slotKey) ?? false;
-        const modelExamId = hasModelDecision ? options.allocation?.slots.get(slotKey) : undefined;
-        if (hasModelDecision && modelExamId === null) {
+        const modelTargetId = hasModelDecision ? options.allocation?.slots.get(slotKey) : undefined;
+        const modelRoutine = modelTargetId
+          ? (input.routines ?? []).find((routine) => routine.id === modelTargetId)
+          : undefined;
+        if (hasModelDecision && modelRoutine) {
+          cursor += 30;
+          consecutiveModelSlots = 0;
+          streak = 0;
+          lastExamId = null;
+          continue;
+        }
+        if (hasModelDecision && modelTargetId === null && options.allocation?.idleBehavior !== "fallback") {
           cursor += 30;
           consecutiveModelSlots = 0;
           streak = 0;
@@ -171,13 +184,14 @@ export function generateStudyPlan(input: PlannerInput, options: PlannerOptions =
           lastExamId = null;
           continue;
         }
-        const recommended: ExamState | null = modelExamId
-          ? states.find(({ exam, planned, target, dailyTotals }) => exam.id === modelExamId
+        const recommended: ExamState | null = modelTargetId
+          ? states.find(({ exam, planned, target, dailyTotals }) => exam.id === modelTargetId
             && exam.date >= date
             && planned < target
             && (dailyTotals.get(date) ?? 0) < maxDaily) ?? null
           : null;
-        const state: ExamState | null = recommended ?? (hasModelDecision ? null : chooseExam(states, date, lastExamId, streak));
+        const allowDeterministicChoice = !hasModelDecision || options.allocation?.idleBehavior === "fallback";
+        const state: ExamState | null = recommended ?? (allowDeterministicChoice ? chooseExam(states, date, lastExamId, streak) : null);
         if (hasModelDecision && !state) {
           cursor += 30;
           continue;
@@ -250,7 +264,17 @@ export function generateStudyPlan(input: PlannerInput, options: PlannerOptions =
       if (creditedDays.size >= routine.sessionsPerWeek || creditedDays.has(date)) continue;
       const usedToday = learningSessions.filter((session) => session.date === date).reduce((sum, session) => sum + session.duration, 0);
       if (usedToday >= maxDaily) continue;
-      const free = subtractSessions(freeWindowsForDate(availability.windows, date, input), date, learningSessions)[0];
+      const freeWindows = subtractSessions(freeWindowsForDate(availability.windows, date, input), date, learningSessions);
+      const modelStart = options.allocation
+        ? [...options.allocation.slots].find(([key, targetId]) => targetId === routine.id && key.startsWith(`${date}:`))
+        : undefined;
+      const modelStartMinute = modelStart ? Number(modelStart[0].slice(modelStart[0].lastIndexOf(":") + 1)) : null;
+      const containingWindow = modelStartMinute === null ? undefined : freeWindows.find((window) => (
+        minutesFromTime(window.start) <= modelStartMinute && minutesFromTime(window.end) >= modelStartMinute + 25
+      ));
+      const free = containingWindow && modelStartMinute !== null
+        ? { ...containingWindow, start: timeFromMinutes(modelStartMinute) }
+        : freeWindows[0];
       if (!free) continue;
       const method = routine.learningMethod === "auto" ? "spaced-repetition" : routine.learningMethod;
       const desired = method === "pomodoro" ? 25 : method === "exam-simulation" ? 60 : routine.preferredSessionMinutes;
@@ -276,8 +300,8 @@ export function generateStudyPlan(input: PlannerInput, options: PlannerOptions =
     rangeEnd,
     sessions,
     planner: options.allocation ? {
-      engine: "model-v007",
-      rewardVersion: "2.0",
+      engine: options.allocation.engine,
+      rewardVersion: options.allocation.rewardVersion,
       inferenceMs: options.allocation.inferenceMs,
       modelSha256: options.allocation.modelSha256,
       local: true,
