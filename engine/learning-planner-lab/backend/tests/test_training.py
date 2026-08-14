@@ -27,6 +27,25 @@ def test_short_training_updates_and_saves_checkpoint(tmp_path, monkeypatch) -> N
     assert metrics
 
 
+def test_training_resumes_steps_and_optimizer_from_checkpoint(tmp_path, monkeypatch) -> None:
+    import learning_lab.trainer as trainer_module
+
+    monkeypatch.setattr(trainer_module, "RUNS_DIR", tmp_path)
+    first_config = TrainingConfig(
+        total_steps=128, rollout_steps=32, parallel_envs=2, batch_size=32,
+        epochs=1, checkpoint_interval=128, validation_size=16,
+    )
+    train_ppo(first_config, "resume-run", lambda _: None, threading.Event(), threading.Event())
+    checkpoint = tmp_path / "resume-run" / "checkpoint.pt"
+    resumed_config = first_config.model_copy(update={"total_steps": 256})
+    result = train_ppo(
+        resumed_config, "resume-run", lambda _: None, threading.Event(), threading.Event(),
+        resume_path=checkpoint,
+    )
+    assert result.steps == 256
+    assert (result.run_directory / "last.pt").exists()
+
+
 def test_v007_compatible_transfer_smoke_training(tmp_path, monkeypatch) -> None:
     import learning_lab.trainer as trainer_module
 

@@ -76,6 +76,15 @@ export default function TrainingTab({ status, models, parentModel, setParentMode
     try { await api.command(name); await onRefresh() } catch (error) { notify((error as Error).message, true) }
   }
 
+  async function recoverLatest() {
+    setBusy(true)
+    try {
+      const recovered = await api.recoverLatest()
+      notify(`Checkpoint bei Step ${recovered.steps.toLocaleString('de-DE')} wiederhergestellt.`)
+      await onRefresh()
+    } catch (error) { notify((error as Error).message, true) } finally { setBusy(false) }
+  }
+
   return <div className="tab-grid training-grid">
     <section className="panel config-panel">
       <div className="section-head"><div><span className="eyebrow">Experiment setup</span><h2>Training konfigurieren</h2></div><span className={`state state-${status.state}`}>{status.state}</span></div>
@@ -110,6 +119,7 @@ export default function TrainingTab({ status, models, parentModel, setParentMode
       {parentModel && !models.find(model => model.id === parentModel)?.training_compatible && <p className="status-message">Schema-Wechsel: QECore v1.07 kann nicht direkt fortgesetzt werden. Nur formgleiche Layer werden kontrolliert übernommen; Eingabe- und Context-Layer starten neu.</p>}
       <div className="train-actions">
         {!active && <button className="primary" onClick={start} disabled={busy}>{busy ? 'Startet…' : 'Start Training'}</button>}
+        {!active && <button onClick={recoverLatest} disabled={busy}>Letzten Checkpoint fortsetzen</button>}
         {status.state === 'running' && <button onClick={() => command('pause')}>Pause</button>}
         {status.state === 'paused' && <button className="primary" onClick={() => command('resume')}>Resume</button>}
         {active && <button className="danger" onClick={() => command('stop')} disabled={status.state === 'stopping'}>Stop safely</button>}

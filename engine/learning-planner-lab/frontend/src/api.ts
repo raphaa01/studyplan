@@ -20,6 +20,7 @@ export const api = {
   challenges: () => request<Challenge[]>('/api/challenges'),
   start: (config: Record<string, unknown>) => request<TrainingStatus>('/api/training/start', { method: 'POST', body: JSON.stringify({ config }) }),
   command: (command: 'pause' | 'resume' | 'stop') => request<TrainingStatus>(`/api/training/${command}`, { method: 'POST' }),
+  recoverLatest: () => request<TrainingStatus>('/api/training/recover-latest', { method: 'POST' }),
   rename: (id: string, name: string) => request<ModelRecord>(`/api/models/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
   remove: (id: string) => request<void>(`/api/models/${id}`, { method: 'DELETE' }),
   export: (id: string) => request<Record<string, unknown>>(`/api/models/${id}/export`, { method: 'POST' }),

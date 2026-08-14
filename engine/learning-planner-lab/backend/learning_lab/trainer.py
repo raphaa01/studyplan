@@ -51,6 +51,7 @@ def train_ppo(
     stop_event: Event,
     parent_path: Path | None = None,
     load_parent_optimizer: bool = True,
+    resume_path: Path | None = None,
 ) -> TrainingResult:
     random.seed(config.seed)
     np.random.seed(config.seed)
@@ -58,7 +59,12 @@ def train_ppo(
     torch.set_num_threads(max(1, min(os.cpu_count() or 1, max(config.parallel_envs, 2))))
     device = torch.device("cpu")
     transferred_layers: list[str] = []
-    if parent_path:
+    resume_payload: dict[str, object] = {}
+    if resume_path:
+        model, resume_payload = load_model(resume_path, device)
+        if isinstance(model, LegacyPlannerActorCritic):
+            raise ValueError("Legacy checkpoints cannot be resumed with the v3 trainer")
+    elif parent_path:
         parent_model = load_model(parent_path, device)[0]
         if isinstance(parent_model, LegacyPlannerActorCritic):
             if config.init_mode != "compatible_transfer":
@@ -72,8 +78,9 @@ def train_ppo(
         model = PlannerActorCritic()
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
-    if parent_path and load_parent_optimizer:
-        _, payload = load_model(parent_path, device)
+    optimizer_source = resume_path or (parent_path if load_parent_optimizer else None)
+    if optimizer_source:
+        _, payload = load_model(optimizer_source, device)
         state = payload.get("optimizer_state")
         if isinstance(state, dict):
             try:
@@ -84,7 +91,7 @@ def train_ppo(
     run_directory = RUNS_DIR / run_id
     run_directory.mkdir(parents=True, exist_ok=True)
     (run_directory / "config.json").write_text(config.model_dump_json(indent=2), encoding="utf-8")
-    (run_directory / "transfer.json").write_text(json.dumps({"source": str(parent_path) if parent_path else None, "layers": transferred_layers}), encoding="utf-8")
+    (run_directory / "transfer.json").write_text(json.dumps({"source": str(resume_path or parent_path) if (resume_path or parent_path) else None, "layers": transferred_layers, "resumed": bool(resume_path)}), encoding="utf-8")
 
     env_count = config.parallel_envs
     generators = [SituationGenerator(config.seed + 1009 * i) for i in range(env_count)]
@@ -92,10 +99,10 @@ def train_ppo(
     observations = [env.reset(seed=config.seed + i) for i, env in enumerate(envs)]
     episode_returns = np.zeros(env_count, dtype=np.float32)
     completed_rewards: deque[float] = deque(maxlen=100)
-    steps = 0
+    steps = int(resume_payload.get("steps", 0))
     episodes = 0
     started = time.perf_counter()
-    last_checkpoint = 0
+    last_checkpoint = steps
     stopped = False
     validation_generator = SituationGenerator(VALIDATION_SEED)
     validation_subset = [
@@ -106,21 +113,28 @@ def train_ppo(
     # local throughput, 50k steps is well below a minute; slower machines still
     # retain a bounded validation cadence.
     evaluation_interval = max(config.rollout_steps, min(config.total_steps // 10, 50_000))
-    next_evaluation = evaluation_interval
-    model.eval()
-    best_validation_reward = float(evaluate_model(model, validation_subset)["mean_reward"])
-    model.train()
-    best_step = 0
-    best_state = deepcopy(model.state_dict())
-    best_optimizer_state = deepcopy(optimizer.state_dict())
+    next_evaluation = ((steps // evaluation_interval) + 1) * evaluation_interval
+    existing_best = run_directory / "best.pt"
+    if resume_path and existing_best.exists():
+        best_model, best_payload = load_model(existing_best, device)
+        best_validation_reward = float(best_payload.get("validation_reward", float("-inf")))
+        best_step = int(best_payload.get("steps", 0))
+        best_state = deepcopy(best_model.state_dict())
+        best_optimizer_state = deepcopy(best_payload.get("optimizer_state", optimizer.state_dict()))
+    else:
+        model.eval()
+        best_validation_reward = float(evaluate_model(model, validation_subset)["mean_reward"])
+        model.train()
+        best_step = steps
+        best_state = deepcopy(model.state_dict())
+        best_optimizer_state = deepcopy(optimizer.state_dict())
+        save_model(model, run_directory / "best.pt", {
+            "optimizer_state": best_optimizer_state,
+            "steps": best_step,
+            "validation_reward": best_validation_reward,
+            "config": config.model_dump(),
+        })
     evaluations_without_improvement = 0
-    save_model(model, run_directory / "best.pt", {
-        "optimizer_state": best_optimizer_state,
-        "steps": best_step,
-        "validation_reward": best_validation_reward,
-        "config": config.model_dump(),
-    })
-
     while steps < config.total_steps and (config.max_episodes is None or episodes < config.max_episodes):
         while pause_event.is_set() and not stop_event.is_set():
             time.sleep(0.1)
