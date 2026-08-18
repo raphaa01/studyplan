@@ -92,9 +92,9 @@ function createModelTargets(input: PlannerInput, today: string): ModelTarget[] {
       };
     });
   const routines: ModelTarget[] = (input.routines ?? [])
-    .filter((routine) => routine.enabled && (!routine.activeUntil || routine.activeUntil >= today))
+    .filter((routine) => routine.enabled && routine.schedulingMode !== "fixed" && (!routine.activeUntil || routine.activeUntil >= today))
     .map((routine) => {
-      const sessions = completed.filter((session) => session.routineId === routine.id);
+      const sessions = completed.filter((session) => session.routineId === routine.id || session.routineCreditIds?.includes(routine.id));
       const recent = latestFeedback(feedback, new Set(sessions.map((session) => session.id)));
       return {
         id: routine.id,
@@ -104,7 +104,7 @@ function createModelTargets(input: PlannerInput, today: string): ModelTarget[] {
         difficulty: Math.min(10, routine.difficulty * 2),
         importance: Math.min(10, routine.importance * 2),
         investedMinutes: sessions.reduce((sum, session) => sum + session.duration, 0),
-        estimatedNeedMinutes: routine.sessionsPerWeek * routine.preferredSessionMinutes,
+        estimatedNeedMinutes: routine.weeklyMinutes ?? routine.sessionsPerWeek * routine.preferredSessionMinutes,
         learningMethod: routine.learningMethod,
         sessionsPerWeek: routine.sessionsPerWeek,
         preferredSessionMinutes: routine.preferredSessionMinutes,

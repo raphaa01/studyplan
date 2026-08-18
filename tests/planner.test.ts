@@ -3,7 +3,7 @@ import { generateStudyPlan } from "@/lib/planner";
 import { examPriority } from "@/lib/planner/priority";
 import { addDays } from "@/lib/planner/date-utils";
 import { buildDayTimeline, currentPhase } from "@/lib/planner/current-phase";
-import type { AvailabilityDay, CalendarItem, Exam, StudySession } from "@/types/study";
+import type { AvailabilityDay, CalendarItem, Exam, LearningRoutine, StudySession } from "@/types/study";
 
 const today = "2026-08-10";
 const allDays = (start = "16:00", end = "20:00"): AvailabilityDay[] => Array.from({ length: 7 }, (_, day) => ({ day, enabled: true, windows: [{ id: `window-${day}`, start, end }] }));
@@ -19,6 +19,16 @@ const makeExam = (patch: Partial<Exam> = {}): Exam => ({
   color: "#47624b",
   learningMethod: "auto",
   topics: [{ id: "topic-low", name: "Extrempunkte", confidence: 2 }],
+  ...patch,
+});
+const makeRoutine = (patch: Partial<LearningRoutine> = {}): LearningRoutine => ({
+  id: "math-routine", subjectId: "mathematik", subject: "Mathematik", title: "Mathematik regelmäßig lernen",
+  weeklyMinutes: 60, schedulingMode: "fixed", fixedSlots: [
+    { id: "monday", day: 1, startTime: "15:00" },
+    { id: "thursday", day: 4, startTime: "18:30" },
+  ],
+  sessionsPerWeek: 2, preferredSessionMinutes: 30, importance: 2, difficulty: 3,
+  learningMethod: "auto", flexible: false, enabled: true,
   ...patch,
 });
 
@@ -94,5 +104,25 @@ describe("deterministic study planner", () => {
     const learning = plan.sessions.filter((session) => session.type !== "break");
     expect(learning.length).toBeGreaterThan(0);
     expect(learning.every((session) => session.duration <= 25)).toBe(true);
+  });
+
+  it("places a weekly routine at each chosen fixed appointment", () => {
+    const routine = makeRoutine();
+    const plan = generateStudyPlan({ availability: allDays(), exams: [], routines: [routine], now: today });
+    const sessions = plan.sessions.filter((session) => session.routineId === routine.id && session.type !== "break");
+    expect(sessions.map((session) => `${session.date}:${session.startTime}`)).toEqual([
+      `${today}:15:00`,
+      `${addDays(today, 3)}:18:30`,
+    ]);
+    expect(sessions.reduce((sum, session) => sum + session.duration, 0)).toBe(60);
+  });
+
+  it("turns a fixed routine into same-subject exam preparation", () => {
+    const routine = makeRoutine({ weeklyMinutes: 30, fixedSlots: [{ id: "monday", day: 1, startTime: "15:00" }], sessionsPerWeek: 1 });
+    const plan = generateStudyPlan({ availability: allDays(), exams: [makeExam()], routines: [routine], now: today });
+    const fixed = plan.sessions.find((session) => session.routineId === routine.id && session.startTime === "15:00");
+    expect(fixed?.examId).toBe("exam-1");
+    expect(fixed?.routineCreditIds).toContain(routine.id);
+    expect(fixed?.duration).toBe(30);
   });
 });

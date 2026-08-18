@@ -13,6 +13,7 @@ export type LearningMethodId = "auto" | "active-recall" | "spaced-repetition" | 
 export type CalendarItemKind = "appointment" | "todo";
 export type CalendarItemStatus = "planned" | "completed";
 export type ActivityKind = "study" | "todo";
+export type RoutineSchedulingMode = "ai" | "fixed";
 
 export interface TimeWindow {
   id: string;
@@ -61,6 +62,9 @@ export interface LearningRoutine {
   subjectId: string;
   subject: string;
   title: string;
+  weeklyMinutes: number;
+  schedulingMode: RoutineSchedulingMode;
+  fixedSlots: RoutineFixedSlot[];
   sessionsPerWeek: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   preferredSessionMinutes: number;
   importance: 1 | 2 | 3 | 4 | 5;
@@ -72,6 +76,12 @@ export interface LearningRoutine {
   activeUntil?: string;
   flexible: boolean;
   enabled: boolean;
+}
+
+export interface RoutineFixedSlot {
+  id: string;
+  day: number;
+  startTime: string;
 }
 
 export interface CalendarItem {
@@ -163,6 +173,7 @@ export interface StudyData {
   preferences: UserPreferences;
   availability: AvailabilityDay[];
   exams: Exam[];
+  routines: LearningRoutine[];
   plan: StudyPlan;
   feedback: StudySessionFeedback[];
   calendarItems: CalendarItem[];
