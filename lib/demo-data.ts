@@ -1,4 +1,4 @@
-import type { AvailabilityDay, CalendarItem, Exam, StudyData, UserPreferences } from "@/types/study";
+import type { AvailabilityDay, CalendarItem, Exam, LearningRoutine, StudyData, UserPreferences } from "@/types/study";
 import { addDays, startOfToday } from "./planner/date-utils";
 import { generateStudyPlan } from "./planner";
 
@@ -84,8 +84,9 @@ export function createDemoData(today = startOfToday()): StudyData {
     { id: "calendar-demo-1", title: "Training", date: addDays(today, 2), startTime: "17:00", duration: 60, kind: "appointment", status: "planned", notes: "Fester Termin" },
     { id: "calendar-demo-2", title: "Formelsammlung ordnen", date: today, startTime: "19:00", duration: 25, kind: "todo", status: "planned" },
   ];
-  const plan = generateStudyPlan({ availability: demoAvailability, exams, preferences: defaultPreferences, calendarItems, now: today });
-  return { preferences: defaultPreferences, availability: demoAvailability, exams, plan, feedback: [], calendarItems, learningProgress: {}, todoFocusProgress: {}, activityLog: [] };
+  const routines: LearningRoutine[] = [];
+  const plan = generateStudyPlan({ availability: demoAvailability, exams, routines, preferences: defaultPreferences, calendarItems, now: today });
+  return { preferences: defaultPreferences, availability: demoAvailability, exams, routines, plan, feedback: [], calendarItems, learningProgress: {}, todoFocusProgress: {}, activityLog: [] };
 }
 
 export const subjectColors = colors;

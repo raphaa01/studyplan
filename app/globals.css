@@ -327,8 +327,44 @@ input::placeholder { color: #b0b4ad; }
 .form-summary .button { width: 100%; }
 .form-summary .summary-note { margin: 10px 0 0; text-align: center; font-size: 9px; }
 
+.routine-section { margin-bottom: 22px; padding: 25px; border: 1px solid var(--line); border-radius: 10px; background: #f4f5f0; }
+.routine-section-head { margin-bottom: 18px; display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+.routine-section-head h2 { margin: 4px 0 5px; font-size: 21px; letter-spacing: -.025em; }
+.routine-section-head p { max-width: 650px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.routine-empty { width: 100%; min-height: 132px; border: 1px dashed #c9cec5; border-radius: 8px; background: rgba(255,255,255,.58); color: var(--muted); cursor: pointer; display: grid; place-items: center; align-content: center; gap: 5px; }
+.routine-empty > span { width: 34px; height: 34px; margin-bottom: 4px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+.routine-empty strong { color: var(--ink); font-size: 12px; }
+.routine-empty small { font-size: 10px; }
+.routine-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(340px,1fr)); gap: 11px; }
+.routine-card { padding: 18px; border: 1px solid var(--line); border-radius: 9px; background: white; box-shadow: 0 4px 15px rgba(38,47,35,.025); }
+.routine-card-main { display: grid; grid-template-columns: minmax(0,1fr) 112px 30px; gap: 10px; align-items: end; }
+.routine-card label > span, .routine-schedule-row > span { display: block; margin-bottom: 7px; color: var(--muted); font-size: 9px; font-weight: 650; text-transform: uppercase; letter-spacing: .055em; }
+.routine-card input, .routine-card select { height: 38px; margin: 0; }
+.routine-minutes-field > div { height: 38px; border: 1px solid var(--line-strong); border-radius: 7px; display: flex; align-items: center; background: white; }
+.routine-minutes-field input { min-width: 0; width: 100%; padding-right: 2px; border: 0; box-shadow: none; }
+.routine-minutes-field small { padding-right: 10px; color: var(--faint); font-size: 9px; }
+.routine-delete { width: 30px; height: 38px; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; }
+.routine-delete:hover { color: var(--danger); }
+.routine-schedule-row { margin-top: 17px; padding-top: 15px; border-top: 1px solid var(--line); }
+.routine-mode { padding: 3px; border-radius: 7px; background: #eff0eb; display: grid; grid-template-columns: 1fr 1fr; }
+.routine-mode button { min-height: 32px; padding: 6px 9px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 9px; font-weight: 620; }
+.routine-mode button.active { color: var(--ink); background: white; box-shadow: 0 1px 4px rgba(40,48,37,.09); }
+.routine-ai-note { min-height: 42px; margin-top: 10px; padding: 10px 12px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; gap: 9px; }
+.routine-ai-note svg { flex: none; }
+.routine-ai-note span { font-size: 9px; line-height: 1.45; }
+.routine-fixed-slots { margin-top: 10px; display: grid; gap: 7px; }
+.routine-fixed-slot { display: grid; grid-template-columns: minmax(0,1fr) 100px 54px 28px; gap: 6px; align-items: center; }
+.routine-fixed-slot select { min-width: 0; }
+.routine-fixed-slot > span { color: var(--muted); font-size: 9px; text-align: right; white-space: nowrap; }
+.routine-fixed-slot button { width: 28px; height: 32px; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; }
+.routine-fixed-slot button:hover:not(:disabled) { color: var(--danger); }
+.routine-fixed-slot button:disabled, .add-fixed-slot:disabled { opacity: .35; cursor: default; }
+.add-fixed-slot { width: max-content; padding: 5px 0; border: 0; background: transparent; color: var(--accent); cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 630; }
+.routine-fixed-slots > p { margin: 0; color: var(--faint); font-size: 9px; line-height: 1.4; }
 .availability-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
 .availability-list { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: white; }
+.availability-section-title { padding: 21px 22px 17px; border-bottom: 1px solid var(--line); }
+.availability-section-title h2 { margin: 4px 0 0; font-size: 18px; }
 .availability-day { min-height: 86px; padding: 19px 22px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 200px minmax(0,1fr); gap: 20px; align-items: start; }
 .availability-day:last-child { border-bottom: 0; }
 .availability-day.disabled { background: #fafaf8; }
@@ -416,6 +452,7 @@ input::placeholder { color: #b0b4ad; }
   .dashboard-grid, .availability-layout { grid-template-columns: 1fr; }
   .dashboard-side { grid-template-columns: repeat(2, 1fr); }
   .availability-help { order: -1; }
+  .routine-list { grid-template-columns: 1fr; }
   .form-layout { grid-template-columns: 1fr; }
   .form-summary { position: static; }
 }
@@ -461,6 +498,14 @@ input::placeholder { color: #b0b4ad; }
   .topic-row select { grid-row: 2; grid-column: 1 / -1; }
   .availability-day { grid-template-columns: 1fr; padding: 17px; }
   .time-window { width: 100%; justify-content: space-between; }
+  .routine-section { padding: 18px 15px; }
+  .routine-section-head { align-items: stretch; flex-direction: column; gap: 14px; }
+  .routine-section-head .button { width: 100%; }
+  .routine-card { padding: 15px; }
+  .routine-card-main { grid-template-columns: minmax(0,1fr) 102px 28px; }
+  .routine-fixed-slot { grid-template-columns: minmax(0,1fr) 90px 28px; }
+  .routine-fixed-slot > span { grid-column: 1 / 3; grid-row: 2; text-align: left; }
+  .routine-fixed-slot button { grid-column: 3; grid-row: 1; }
   .onboarding-shell { padding: 14px 12px 30px; }
   .onboarding-card { min-height: 540px; margin-top: 20px; padding: 32px 20px 20px; }
   .onboarding-days { grid-template-columns: repeat(4,1fr); }

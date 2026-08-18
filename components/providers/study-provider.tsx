@@ -7,7 +7,7 @@ import { LocalStorageRepository } from "@/lib/storage/local-storage-repository";
 import { SupabaseStudyRepository } from "@/lib/storage/supabase-study-repository";
 import { normalizeStudyData } from "@/lib/study-data";
 import { appendActivityRecord, createStudyActivity, createTodoActivity } from "@/lib/statistics";
-import type { AvailabilityDay, CalendarItem, Exam, LearningSessionProgress, PlannerInput, StudyData, StudySessionFeedback, TodoFocusProgress, UserPreferences } from "@/types/study";
+import type { AvailabilityDay, CalendarItem, Exam, LearningRoutine, LearningSessionProgress, PlannerInput, StudyData, StudySessionFeedback, TodoFocusProgress, UserPreferences } from "@/types/study";
 import { useAccount } from "./account-provider";
 
 type SyncStatus = "idle" | "syncing" | "synced" | "error";
@@ -21,6 +21,7 @@ interface StudyContextValue extends StudyData {
   saveExam: (exam: Exam) => void;
   removeExam: (id: string) => void;
   saveAvailability: (value: AvailabilityDay[]) => void;
+  saveLearningSettings: (availability: AvailabilityDay[], routines: LearningRoutine[]) => void;
   savePreferences: (value: UserPreferences) => void;
   saveCalendarItem: (value: CalendarItem) => void;
   removeCalendarItem: (id: string) => void;
@@ -109,6 +110,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
     plan: generateStudyPlan({
       availability: current.availability,
       exams: current.exams,
+      routines: current.routines,
       previousSessions: current.plan.sessions,
       feedback: current.feedback,
       preferences: current.preferences,
@@ -119,11 +121,12 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
   const plannerInput = useMemo<PlannerInput>(() => ({
     availability: data.availability,
     exams: data.exams,
+    routines: data.routines,
     previousSessions: data.plan.sessions.filter((session) => session.status === "completed" || session.status === "skipped"),
     feedback: data.feedback,
     preferences: data.preferences,
     calendarItems: data.calendarItems,
-  }), [data.availability, data.calendarItems, data.exams, data.feedback, data.plan.sessions, data.preferences]);
+  }), [data.availability, data.calendarItems, data.exams, data.feedback, data.plan.sessions, data.preferences, data.routines]);
   const plannerInputKey = JSON.stringify(plannerInput);
 
   useEffect(() => {
@@ -164,6 +167,7 @@ export function StudyProvider({ children }: { children: React.ReactNode }) {
     saveExam: (exam) => commit((current) => optimize({ ...current, exams: [...current.exams.filter((item) => item.id !== exam.id), exam] })),
     removeExam: (id) => commit((current) => optimize({ ...current, exams: current.exams.filter((exam) => exam.id !== id) })),
     saveAvailability: (availability) => commit((current) => optimize({ ...current, availability })),
+    saveLearningSettings: (availability, routines) => commit((current) => optimize({ ...current, availability, routines })),
     savePreferences: (preferences) => commit((current) => ({ ...current, preferences })),
     saveCalendarItem: (calendarItem) => commit((current) => optimize({ ...current, calendarItems: [...current.calendarItems.filter((item) => item.id !== calendarItem.id), calendarItem] })),
     removeCalendarItem: (id) => commit((current) => {

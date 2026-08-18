@@ -11,6 +11,7 @@ const availability: AvailabilityDay[] = Array.from({ length: 7 }, (_, day) => ({
 }));
 const routine: LearningRoutine = {
   id: "math-routine", subjectId: "mathematik", subject: "Mathematik", title: "Mathematik allgemein",
+  weeklyMinutes: 60, schedulingMode: "ai", fixedSlots: [],
   sessionsPerWeek: 2, preferredSessionMinutes: 30, importance: 3, difficulty: 3,
   learningMethod: "interleaving", flexible: true, enabled: true,
 };
